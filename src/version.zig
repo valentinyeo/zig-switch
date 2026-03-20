@@ -1,2 +1,2 @@
-pub const version = "0.2.0";
-pub const summary = "Alt+Tab hook with tray toggle, Shift+Space modes, mouse clicks";
+pub const version = "0.3.0";
+pub const summary = "Classic Alt+Tab: instant switch, hold for picker, Tab cycles";
