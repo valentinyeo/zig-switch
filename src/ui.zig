@@ -369,13 +369,18 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
             }
         },
         win32.VK_TAB => {
-            // Tab = cycle clusters (switcher mode only)
-            if (current_mode == .switcher) {
-                if (cluster_count > 0) {
-                    cluster_index = (cluster_index + 1) % (cluster_count + 1);
+            // Tab = next item, Shift+Tab = previous item
+            const shift_down = (win32.GetKeyState(win32.VK_SHIFT) < 0);
+            if (filtered_count > 0) {
+                if (shift_down) {
+                    selected = if (selected == 0) filtered_count - 1 else selected - 1;
+                } else {
+                    selected = if (selected >= filtered_count - 1) 0 else selected + 1;
                 }
-                selected = 0;
-                refilter();
+                if (selected < scroll_offset) scroll_offset = selected;
+                if (selected >= scroll_offset + cfg.max_visible_rows) {
+                    scroll_offset = selected - cfg.max_visible_rows + 1;
+                }
             }
             _ = win32.InvalidateRect(hwnd, null, 0);
         },
