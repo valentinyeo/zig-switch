@@ -169,6 +169,17 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
             }
         }
 
+        // Space while in Alt+Tab mode → switch to search
+        if (kb.vkCode == win32.VK_SPACE and alttab_active) {
+            if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
+                alttab_active = false;
+                if (main_thread_id != 0) {
+                    _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_SEARCH, 0, 0);
+                }
+            }
+            return 1;
+        }
+
         // Intercept Alt+Tab
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {

@@ -178,6 +178,22 @@ pub fn altTabNext() void {
     }
 }
 
+pub fn altTabToSearch() void {
+    if (visible and alttab_mode) {
+        // Switch from Alt+Tab mode to search mode
+        alttab_mode = false;
+        // Release Alt so typing works
+        win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+        // Reset search and selection
+        search_len = 0;
+        @memset(&search_buf, 0);
+        selected = 0;
+        refilter();
+        const hwnd = overlay_hwnd orelse return;
+        _ = win32.InvalidateRect(hwnd, null, 0);
+    }
+}
+
 pub fn altTabActivate() void {
     if (visible and alttab_mode) {
         alttab_mode = false;

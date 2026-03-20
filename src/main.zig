@@ -39,6 +39,8 @@ pub fn main() void {
             ui.altTabNext();
         } else if (msg.message == win32.WM_APP_ALTTAB_PREV) {
             ui.altTabPrev();
+        } else if (msg.message == win32.WM_APP_ALTTAB_SEARCH) {
+            ui.altTabToSearch();
         } else if (msg.message == win32.WM_APP_ALTTAB_ACTIVATE) {
             ui.altTabActivate();
         } else {

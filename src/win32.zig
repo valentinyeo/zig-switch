@@ -317,7 +317,8 @@ pub extern "kernel32" fn GetCurrentThreadId() callconv(.winapi) DWORD;
 pub const WM_APP_ALTTAB: UINT = 0x8001; // Alt+Tab: show overlay + select next
 pub const WM_APP_ALTTAB_NEXT: UINT = 0x8002; // Tab while Alt held: cycle next
 pub const WM_APP_ALTTAB_PREV: UINT = 0x8003; // Shift+Tab while Alt held: cycle prev
-pub const WM_APP_ALTTAB_ACTIVATE: UINT = 0x8004; // Alt released: activate selected
+pub const WM_APP_ALTTAB_SEARCH: UINT = 0x8004; // Space while Alt+Tab: switch to search
+pub const WM_APP_ALTTAB_ACTIVATE: UINT = 0x8005; // Alt released: activate selected
 
 // Tray icon
 pub const NOTIFYICONDATAW = extern struct {
