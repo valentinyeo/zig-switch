@@ -149,11 +149,21 @@ fn trayWndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: 
 }
 
 var alt_held = false;
+var shift_held = false;
 var alttab_active = false; // true while Alt is held and overlay was opened via Alt+Tab
 
 fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
     if (nCode == win32.HC_ACTION) {
         const kb: *const win32.KBDLLHOOKSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+
+        // Track Shift key state
+        if (kb.vkCode == win32.VK_LSHIFT or kb.vkCode == win32.VK_RSHIFT) {
+            if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
+                shift_held = true;
+            } else if (wParam == win32.WM_KEYUP_HOOK or wParam == win32.WM_SYSKEYUP) {
+                shift_held = false;
+            }
+        }
 
         // Track Alt key state
         if (kb.vkCode == win32.VK_LMENU or kb.vkCode == win32.VK_RMENU) {
@@ -188,7 +198,7 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
                 if (main_thread_id != 0) {
-                    const shift = (win32.GetKeyState(win32.VK_SHIFT) < 0);
+                    const shift = shift_held;
                     if (!alttab_active) {
                         alttab_active = true;
                         if (shift) {

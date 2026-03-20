@@ -213,6 +213,8 @@ pub extern "user32" fn GetKeyState(nVirtKey: i32) callconv(.winapi) i16;
 
 pub const VK_CONTROL: i32 = 0x11;
 pub const VK_SHIFT: i32 = 0x10;
+pub const VK_LSHIFT: DWORD = 0xA0;
+pub const VK_RSHIFT: DWORD = 0xA1;
 
 pub fn postClose(hwnd: HWND) void {
     var result: usize = 0;
