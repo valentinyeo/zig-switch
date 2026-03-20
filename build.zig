@@ -18,6 +18,9 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // Embed application icon
+    exe.addWin32ResourceFile(.{ .file = b.path("zigswitch.rc") });
+
     exe.linkSystemLibrary("user32");
     exe.linkSystemLibrary("gdi32");
     exe.linkSystemLibrary("kernel32");
