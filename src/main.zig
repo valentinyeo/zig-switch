@@ -2,6 +2,7 @@ const std = @import("std");
 const win32 = @import("win32.zig");
 const ui = @import("ui.zig");
 const config = @import("config.zig");
+const tray = @import("tray.zig");
 
 pub fn main() void {
     // DPI awareness
@@ -10,15 +11,21 @@ pub fn main() void {
     // Load config
     const cfg = config.loadConfig();
 
-    // Register global hotkey (Ctrl+Space)
+    // Register global hotkey (Ctrl+Space = switcher)
     if (win32.RegisterHotKey(null, 1, cfg.hotkey_modifiers, cfg.hotkey_vk) == 0) {
         _ = win32.MessageBoxW(null, toWide("Failed to register hotkey. It may be in use by another application."), toWide("ZigSwitch Error"), win32.MB_OK | win32.MB_ICONERROR);
         return;
     }
 
+    // Register Alt+Space = launcher mode
+    _ = win32.RegisterHotKey(null, 2, win32.MOD_ALT, win32.VK_SPACE);
+
     // Create overlay window
     const hInstance = win32.GetModuleHandleW(null);
     ui.init(hInstance, cfg);
+
+    // Create system tray icon (Alt+Tab hook is OFF by default)
+    tray.init(hInstance, &onAltTab);
 
     // Message loop
     var msg: win32.MSG = undefined;
@@ -27,14 +34,24 @@ pub fn main() void {
         if (ret == 0 or ret == -1) break;
 
         if (msg.message == win32.WM_HOTKEY) {
-            ui.toggle();
+            if (msg.wParam == 2) {
+                ui.toggleLauncher();
+            } else {
+                ui.toggle();
+            }
         } else {
             _ = win32.TranslateMessage(&msg);
             _ = win32.DispatchMessageW(&msg);
         }
     }
 
+    tray.deinit();
     _ = win32.UnregisterHotKey(null, 1);
+    _ = win32.UnregisterHotKey(null, 2);
+}
+
+fn onAltTab() void {
+    ui.toggle();
 }
 
 fn toWide(comptime s: []const u8) [*:0]const u16 {

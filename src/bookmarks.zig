@@ -45,7 +45,14 @@ pub fn openBookmark(bm: *const Bookmark) void {
     for (0..bm.url_len) |i| {
         url_z[i] = bm.url[i];
     }
-    _ = win32.ShellExecuteW(null, null, @ptrCast(&url_z), null, null, win32.SW_SHOW);
+    const open = comptime blk: {
+        const s = "open";
+        var buf: [s.len + 1]u16 = undefined;
+        for (s, 0..) |c, i| buf[i] = c;
+        buf[s.len] = 0;
+        break :blk buf;
+    };
+    _ = win32.ShellExecuteW(null, @ptrCast(&open), @ptrCast(&url_z), null, null, win32.SW_SHOW);
 }
 
 fn loadBookmarks() void {

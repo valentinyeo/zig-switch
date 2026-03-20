@@ -23,7 +23,6 @@ const MODE_ACCENT = [3]win32.COLORREF{
     win32.rgb(0x9a, 0x4a, 0xb4), // Bookmarks: purple
 };
 
-const MODE_NAMES = [3][]const u8{ "Windows", "Launch", "Bookmarks" };
 
 // Colors
 const BG_COLOR = win32.rgb(0x1e, 0x1e, 0x1e);
@@ -31,15 +30,12 @@ const TEXT_COLOR = win32.rgb(0xff, 0xff, 0xff);
 const DIM_COLOR = win32.rgb(0x88, 0x88, 0x88);
 const SEARCH_BG = win32.rgb(0x2d, 0x2d, 0x2d);
 const BORDER_COLOR = win32.rgb(0x3e, 0x3e, 0x3e);
-const MODE_TAB_BG = win32.rgb(0x2a, 0x2a, 0x2a);
-const MODE_TAB_ACTIVE = win32.rgb(0x3a, 0x3a, 0x3a);
 
 // Layout
 const PADDING = 8;
 const ICON_SIZE = 16;
 const ROW_HEIGHT = 24;
 const SEARCH_HEIGHT = 32;
-const MODE_BAR_HEIGHT = 24;
 
 // State
 var overlay_hwnd: ?win32.HWND = null;
@@ -91,9 +87,9 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
 
     const screen_w = win32.GetSystemMetrics(win32.SM_CXSCREEN);
     const screen_h = win32.GetSystemMetrics(win32.SM_CYSCREEN);
-    const width: i32 = @divTrunc(screen_w * 6, 10);
+    const width: i32 = @divTrunc(screen_w * 8, 10);
     const max_rows: i32 = @intCast(cfg.max_visible_rows);
-    const height: i32 = MODE_BAR_HEIGHT + SEARCH_HEIGHT + PADDING + max_rows * ROW_HEIGHT + PADDING;
+    const height: i32 = 2 + SEARCH_HEIGHT + PADDING + max_rows * ROW_HEIGHT + PADDING;
     const x = @divTrunc(screen_w - width, 2);
     const y = @divTrunc(screen_h - height, 3);
 
@@ -112,13 +108,20 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
 }
 
 pub fn toggle() void {
+    toggleWithMode(.switcher);
+}
+
+pub fn toggleLauncher() void {
+    toggleWithMode(.launcher);
+}
+
+fn toggleWithMode(mode: Mode) void {
     const hwnd = overlay_hwnd orelse return;
 
     if (visible) {
         hide();
     } else {
-        // Reset to switcher mode
-        current_mode = .switcher;
+        current_mode = mode;
         refreshCurrentMode();
 
         _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
@@ -127,29 +130,6 @@ pub fn toggle() void {
         visible = true;
         _ = win32.InvalidateRect(hwnd, null, 0);
     }
-}
-
-pub fn cycleCluster() void {
-    const hwnd = overlay_hwnd orelse return;
-    if (current_mode == .switcher) {
-        if (cluster_count > 0) {
-            cluster_index = (cluster_index + 1) % (cluster_count + 1);
-        }
-        selected = 0;
-        refilter();
-    }
-    _ = win32.InvalidateRect(hwnd, null, 0);
-}
-
-pub fn cycleMode() void {
-    const hwnd = overlay_hwnd orelse return;
-    current_mode = switch (current_mode) {
-        .switcher => .launcher,
-        .launcher => .bookmarks_,
-        .bookmarks_ => .switcher,
-    };
-    refreshCurrentMode();
-    _ = win32.InvalidateRect(hwnd, null, 0);
 }
 
 pub fn isVisible() bool {
@@ -298,13 +278,13 @@ fn activateSelected() void {
         },
         .launcher => {
             const items = launcher.getItems();
-            launcher.launch(&items[idx]);
             hide();
+            launcher.launch(&items[idx]);
         },
         .bookmarks_ => {
             const items = bookmarks.getItems();
-            bookmarks.openBookmark(&items[idx]);
             hide();
+            bookmarks.openBookmark(&items[idx]);
         },
     }
 }
@@ -340,19 +320,7 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
     switch (key) {
         win32.VK_ESCAPE => hide(),
         win32.VK_RETURN => {
-            const ctrl_down = (win32.GetKeyState(win32.VK_CONTROL) < 0);
-            if (ctrl_down) {
-                // Ctrl+Enter = switch mode
-                current_mode = switch (current_mode) {
-                    .switcher => .launcher,
-                    .launcher => .bookmarks_,
-                    .bookmarks_ => .switcher,
-                };
-                refreshCurrentMode();
-                _ = win32.InvalidateRect(hwnd, null, 0);
-            } else {
-                activateSelected();
-            }
+            activateSelected();
         },
         win32.VK_UP => {
             if (selected > 0) {
@@ -388,6 +356,19 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
                 return; // Don't let 'q' go to WM_CHAR
             }
         },
+        win32.VK_SPACE => {
+            const shift_down = (win32.GetKeyState(win32.VK_SHIFT) < 0);
+            if (shift_down) {
+                current_mode = switch (current_mode) {
+                    .switcher => .launcher,
+                    .launcher => .bookmarks_,
+                    .bookmarks_ => .switcher,
+                };
+                refreshCurrentMode();
+                _ = win32.InvalidateRect(hwnd, null, 0);
+            }
+            // Regular space falls through to WM_CHAR
+        },
         win32.VK_BACK => {
             if (search_len > 0) {
                 search_len -= 1;
@@ -404,6 +385,8 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
 fn handleChar(hwnd: win32.HWND, char: win32.WPARAM) void {
     if (char < 0x20) return; // Control characters (includes Ctrl+Q = 0x11)
     if (char == 0x7F) return;
+    // Shift+Space = mode switch, don't type a space
+    if (char == 0x20 and win32.GetKeyState(win32.VK_SHIFT) < 0) return;
 
     if (search_len < search_buf.len - 1) {
         search_buf[search_len] = @intCast(char);
@@ -451,13 +434,11 @@ fn paint(hwnd: win32.HWND) void {
     var accent_rect = win32.RECT{ .left = 0, .top = 0, .right = width, .bottom = 2 };
     _ = win32.FillRect(mem_dc, &accent_rect, accent_brush);
 
-    // Mode tab bar
     const border_brush = win32.CreateSolidBrush(BORDER_COLOR) orelse return;
     defer _ = win32.DeleteObject(@ptrCast(border_brush));
-    paintModeBar(mem_dc, width, mode_idx);
 
-    // Search box
-    const search_y = MODE_BAR_HEIGHT;
+    // Search box (starts right after accent border)
+    const search_y: i32 = 2;
     const search_brush = win32.CreateSolidBrush(SEARCH_BG) orelse return;
     defer _ = win32.DeleteObject(@ptrCast(search_brush));
     var search_rect = win32.RECT{
@@ -569,36 +550,6 @@ fn paint(hwnd: win32.HWND) void {
                 .bookmarks_ => paintBookmarkRow(mem_dc, data_idx, text_y, width),
             }
         }
-    }
-}
-
-fn paintModeBar(mem_dc: win32.HDC, width: win32.LONG, active: usize) void {
-    const tab_w = @divTrunc(width, 3);
-    const mode_names = [3][*:0]const u16{
-        comptime toWide("Windows"),
-        comptime toWide("Launch"),
-        comptime toWide("Bookmarks"),
-    };
-    const mode_lens = [3]i32{ 7, 6, 9 };
-
-    for (0..3) |i| {
-        const x: i32 = @intCast(tab_w * @as(i32, @intCast(i)));
-        const is_active = (i == active);
-
-        const tab_brush = win32.CreateSolidBrush(if (is_active) MODE_TAB_ACTIVE else MODE_TAB_BG) orelse continue;
-        defer _ = win32.DeleteObject(@ptrCast(tab_brush));
-
-        var tab_rect = win32.RECT{
-            .left = x,
-            .top = 2,
-            .right = if (i == 2) width else x + tab_w,
-            .bottom = MODE_BAR_HEIGHT,
-        };
-        _ = win32.FillRect(mem_dc, &tab_rect, tab_brush);
-
-        _ = win32.SetTextColor(mem_dc, if (is_active) MODE_ACCENT[i] else DIM_COLOR);
-        const text_x = x + @divTrunc(tab_w - mode_lens[i] * 8, 2);
-        _ = win32.TextOutW(mem_dc, text_x, 5, mode_names[i], mode_lens[i]);
     }
 }
 

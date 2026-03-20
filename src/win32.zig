@@ -212,6 +212,7 @@ pub extern "user32" fn SetFocus(hWnd: ?HWND) callconv(.winapi) ?HWND;
 pub extern "user32" fn GetKeyState(nVirtKey: i32) callconv(.winapi) i16;
 
 pub const VK_CONTROL: i32 = 0x11;
+pub const VK_SHIFT: i32 = 0x10;
 
 pub fn postClose(hwnd: HWND) void {
     var result: usize = 0;
@@ -247,6 +248,18 @@ pub extern "kernel32" fn GetModuleFileNameW(hModule: ?HINSTANCE, lpFilename: [*]
 // Shell32 functions
 pub extern "shell32" fn ExtractIconExW(lpszFile: [*:0]const u16, nIconIndex: i32, phiconLarge: ?*?HICON, phiconSmall: ?*?HICON, nIcons: UINT) callconv(.winapi) UINT;
 pub extern "shell32" fn ShellExecuteW(hwnd: ?HWND, lpOperation: ?[*:0]const u16, lpFile: [*:0]const u16, lpParameters: ?[*:0]const u16, lpDirectory: ?[*:0]const u16, nShowCmd: i32) callconv(.winapi) isize;
+pub extern "shell32" fn SHGetFileInfoW(pszPath: [*:0]const u16, dwFileAttributes: DWORD, psfi: *SHFILEINFOW, cbFileInfo: UINT, uFlags: UINT) callconv(.winapi) usize;
+
+pub const SHFILEINFOW = extern struct {
+    hIcon: ?HICON = null,
+    iIcon: i32 = 0,
+    dwAttributes: DWORD = 0,
+    szDisplayName: [260]u16 = [_]u16{0} ** 260,
+    szTypeName: [80]u16 = [_]u16{0} ** 80,
+};
+
+pub const SHGFI_ICON: UINT = 0x000000100;
+pub const SHGFI_SMALLICON: UINT = 0x000000001;
 
 // Kernel32 file search
 pub const WIN32_FIND_DATAW = extern struct {
@@ -302,6 +315,52 @@ pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lPar
 pub const WM_APP_ALTTAB: UINT = 0x8001; // Custom message for alt-tab trigger
 pub const WM_APP_TAB: UINT = 0x8002; // Custom message for tab while overlay visible
 pub const WM_APP_CTRLTAB: UINT = 0x8003; // Custom message for ctrl+tab mode switch
+
+// Tray icon
+pub const NOTIFYICONDATAW = extern struct {
+    cbSize: DWORD = @sizeOf(NOTIFYICONDATAW),
+    hWnd: ?HWND = null,
+    uID: UINT = 0,
+    uFlags: UINT = 0,
+    uCallbackMessage: UINT = 0,
+    hIcon: ?HICON = null,
+    szTip: [128]u16 = [_]u16{0} ** 128,
+    dwState: DWORD = 0,
+    dwStateMask: DWORD = 0,
+    szInfo: [256]u16 = [_]u16{0} ** 256,
+    uVersion: UINT = 0,
+    szInfoTitle: [64]u16 = [_]u16{0} ** 64,
+    dwInfoFlags: DWORD = 0,
+    guidItem: [16]u8 = [_]u8{0} ** 16,
+    hBalloonIcon: ?HICON = null,
+};
+
+pub const NIM_ADD: DWORD = 0x00000000;
+pub const NIM_MODIFY: DWORD = 0x00000001;
+pub const NIM_DELETE: DWORD = 0x00000002;
+pub const NIF_MESSAGE: UINT = 0x00000001;
+pub const NIF_ICON: UINT = 0x00000002;
+pub const NIF_TIP: UINT = 0x00000004;
+
+pub const WM_APP_TRAY: UINT = 0x8010;
+pub const WM_RBUTTONUP: UINT = 0x0205;
+pub const WM_LBUTTONDBLCLK: UINT = 0x0203;
+pub const WM_COMMAND: UINT = 0x0111;
+
+pub extern "shell32" fn Shell_NotifyIconW(dwMessage: DWORD, lpData: *NOTIFYICONDATAW) callconv(.winapi) BOOL;
+
+// Menu
+pub extern "user32" fn CreatePopupMenu() callconv(.winapi) ?HMENU;
+pub extern "user32" fn AppendMenuW(hMenu: HMENU, uFlags: UINT, uIDNewItem: usize, lpNewItem: ?[*:0]const u16) callconv(.winapi) BOOL;
+pub extern "user32" fn TrackPopupMenu(hMenu: HMENU, uFlags: UINT, x: i32, y: i32, nReserved: i32, hWnd: HWND, prcRect: ?*const RECT) callconv(.winapi) BOOL;
+pub extern "user32" fn DestroyMenu(hMenu: HMENU) callconv(.winapi) BOOL;
+pub extern "user32" fn GetCursorPos(lpPoint: *POINT) callconv(.winapi) BOOL;
+
+pub const MF_STRING: UINT = 0x00000000;
+pub const MF_CHECKED: UINT = 0x00000008;
+pub const MF_SEPARATOR: UINT = 0x00000800;
+pub const TPM_BOTTOMALIGN: UINT = 0x0020;
+pub const TPM_LEFTALIGN: UINT = 0x0000;
 
 // DPI
 pub extern "user32" fn SetProcessDpiAwarenessContext(value: isize) callconv(.winapi) BOOL;

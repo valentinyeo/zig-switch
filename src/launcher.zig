@@ -40,7 +40,14 @@ pub fn launch(item: *const LaunchItem) void {
     if (item.path_len == 0) return;
     var path_z: [513]u16 = [_]u16{0} ** 513;
     @memcpy(path_z[0..item.path_len], item.path[0..item.path_len]);
-    _ = win32.ShellExecuteW(null, null, @ptrCast(&path_z), null, null, win32.SW_SHOW);
+    const open = comptime blk: {
+        const s = "open";
+        var buf: [s.len + 1]u16 = undefined;
+        for (s, 0..) |c, i| buf[i] = c;
+        buf[s.len] = 0;
+        break :blk buf;
+    };
+    _ = win32.ShellExecuteW(null, @ptrCast(&open), @ptrCast(&path_z), null, null, win32.SW_SHOW);
 }
 
 fn loadStartMenuItems() void {
@@ -115,13 +122,13 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
                     @memcpy(item.path[dir.len + 1 .. full_len], name_slice);
                     item.path_len = full_len;
 
-                    // Extract icon from .lnk
+                    // Extract icon from .lnk via SHGetFileInfoW
                     var path_z: [513]u16 = [_]u16{0} ** 513;
                     @memcpy(path_z[0..item.path_len], item.path[0..item.path_len]);
-                    var small_icon: ?win32.HICON = null;
-                    const extracted = win32.ExtractIconExW(@ptrCast(&path_z), 0, null, &small_icon, 1);
-                    if (extracted > 0) {
-                        item.icon = small_icon;
+                    var sfi: win32.SHFILEINFOW = .{};
+                    const result = win32.SHGetFileInfoW(@ptrCast(&path_z), 0, &sfi, @sizeOf(win32.SHFILEINFOW), win32.SHGFI_ICON | win32.SHGFI_SMALLICON);
+                    if (result != 0 and sfi.hIcon != null) {
+                        item.icon = sfi.hIcon;
                     }
 
                     items[item_count] = item;
