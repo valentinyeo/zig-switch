@@ -1,2 +1,2 @@
-pub const version = "0.5.0";
-pub const summary = "Search prefixes: b: for bookmarks, s: for start menu";
+pub const version = "0.5.1";
+pub const summary = "Fix bookmarks: open in Edge. Deduplicate start menu items";

@@ -108,10 +108,15 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
             // Check if it's a .lnk file
             if (endsWithLnk(name_slice)) {
                 if (item_count < MAX_ITEMS) {
-                    var item = LaunchItem{};
-
-                    // Display name = filename without .lnk
                     const display_len = name_slice.len - 4; // Remove ".lnk"
+
+                    // Skip duplicates (same display name)
+                    if (isDuplicate(name_slice[0..display_len])) {
+                        if (win32.FindNextFileW(handle, &find_data) == 0) break;
+                        continue;
+                    }
+
+                    var item = LaunchItem{};
                     @memcpy(item.name[0..display_len], name_slice[0..display_len]);
                     item.name_len = display_len;
 
@@ -139,6 +144,24 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
 
         if (win32.FindNextFileW(handle, &find_data) == 0) break;
     }
+}
+
+fn isDuplicate(name: []const u16) bool {
+    for (0..item_count) |i| {
+        if (items[i].name_len == name.len) {
+            var match = true;
+            for (0..name.len) |j| {
+                const a = if (items[i].name[j] >= 'A' and items[i].name[j] <= 'Z') items[i].name[j] + 32 else items[i].name[j];
+                const b = if (name[j] >= 'A' and name[j] <= 'Z') name[j] + 32 else name[j];
+                if (a != b) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return true;
+        }
+    }
+    return false;
 }
 
 fn endsWithLnk(name: []const u16) bool {

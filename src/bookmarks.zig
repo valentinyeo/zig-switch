@@ -40,19 +40,24 @@ pub fn reload() void {
 
 pub fn openBookmark(bm: *const Bookmark) void {
     if (bm.url_len == 0) return;
-    // Convert URL to wide for ShellExecuteW
+    // Convert URL to wide for passing as argument to msedge
     var url_z: [513]u16 = [_]u16{0} ** 513;
     for (0..bm.url_len) |i| {
         url_z[i] = bm.url[i];
     }
-    const open = comptime blk: {
-        const s = "open";
+    const open = comptime toWide("open");
+    const msedge = comptime toWide("msedge");
+    _ = win32.ShellExecuteW(null, open, msedge, @ptrCast(&url_z), null, win32.SW_SHOW);
+}
+
+fn toWide(comptime s: []const u8) [*:0]const u16 {
+    const result = comptime blk: {
         var buf: [s.len + 1]u16 = undefined;
         for (s, 0..) |c, i| buf[i] = c;
         buf[s.len] = 0;
         break :blk buf;
     };
-    _ = win32.ShellExecuteW(null, @ptrCast(&open), @ptrCast(&url_z), null, null, win32.SW_SHOW);
+    return @ptrCast(&result);
 }
 
 fn loadBookmarks() void {
