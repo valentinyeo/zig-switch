@@ -340,8 +340,13 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
         },
         win32.WM_APP_ALTTAB_ACTIVATE => {
             // Alt released: activate selected and close
-            if (visible) {
-                activateSelected();
+            if (visible and filtered_count > 0) {
+                const idx = filtered_indices[selected];
+                const target = windows[idx].hwnd;
+                hide();
+                // Use keybd_event trick to allow SetForegroundWindow
+                win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+                _ = win32.SetForegroundWindow(target);
             }
             return 0;
         },
