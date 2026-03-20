@@ -183,16 +183,20 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
             }
         }
 
-        // Space while in Alt+Tab mode → switch to search
-        if (kb.vkCode == win32.VK_SPACE_U32 and alttab_active) {
-            if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
-                alttab_active = false;
-                if (main_thread_id != 0) {
-                    _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_SEARCH, 0, 0);
-                }
-            }
-            return 1;
+        // Escape cancels Alt+Tab mode (safety valve)
+        if (kb.vkCode == 0x1B and alttab_active) { // VK_ESCAPE
+            alttab_active = false;
+            alt_held = false;
         }
+
+        // Any non-modifier key while alttab_active but NOT Alt+Tab → cancel alttab
+        // This prevents the hook from getting stuck
+        if (alttab_active and !alt_held) {
+            alttab_active = false;
+        }
+
+        // Space while in Alt+Tab mode → let it through to overlay window
+        // The UI handles the switch to search mode via WM_SYSKEYDOWN
 
         // Intercept Alt+Tab
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {

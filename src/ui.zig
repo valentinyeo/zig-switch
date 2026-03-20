@@ -223,6 +223,7 @@ fn hide() void {
     _ = win32.ShowWindow(hwnd, win32.SW_HIDE);
     visible = false;
     alttab_mode = false;
+    tray.cancelAltTab();
 }
 
 fn refreshCurrentMode() void {
