@@ -42,7 +42,7 @@ var overlay_hwnd: ?win32.HWND = null;
 var visible = false;
 var cfg: config_mod.Config = .{};
 var current_mode: Mode = .switcher;
-var alttab_pending = false; // Alt+Tab fired but overlay not shown yet
+var alttab_mode = false; // true = opened via Alt+Tab (release Alt to activate)
 
 // Switcher state
 var windows: [window_enum.MAX_WINDOWS]window_enum.WindowInfo = undefined;
@@ -139,20 +139,17 @@ pub fn isVisible() bool {
 
 pub fn altTabShow() void {
     const hwnd = overlay_hwnd orelse return;
-    if (!visible and !alttab_pending) {
+    if (!visible) {
+        alttab_mode = true;
         current_mode = .switcher;
         refreshCurrentMode();
         if (filtered_count > 1) selected = 1;
-        alttab_pending = true;
+        showOverlay(hwnd);
     }
-    _ = hwnd;
 }
 
 pub fn altTabNext() void {
     const hwnd = overlay_hwnd orelse return;
-    if (alttab_pending and !visible) {
-        showOverlay(hwnd);
-    }
     if (visible and filtered_count > 0) {
         selected = if (selected >= filtered_count - 1) 0 else selected + 1;
         if (selected < scroll_offset) scroll_offset = selected;
@@ -164,17 +161,16 @@ pub fn altTabNext() void {
 }
 
 pub fn altTabActivate() void {
-    if (alttab_pending or visible) {
+    if (visible and alttab_mode) {
+        alttab_mode = false;
         if (filtered_count > 0) {
             const idx = filtered_indices[selected];
             const target = windows[idx].hwnd;
-            if (visible) hide();
-            alttab_pending = false;
+            hide();
             win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
             _ = win32.SetForegroundWindow(target);
         } else {
-            if (visible) hide();
-            alttab_pending = false;
+            hide();
         }
     }
 }
@@ -192,6 +188,7 @@ fn hide() void {
     const hwnd = overlay_hwnd orelse return;
     _ = win32.ShowWindow(hwnd, win32.SW_HIDE);
     visible = false;
+    alttab_mode = false;
 }
 
 fn refreshCurrentMode() void {
