@@ -50,6 +50,9 @@ pub fn init(hInstance: ?win32.HINSTANCE, overlay: ?win32.HWND) void {
     }
 
     _ = win32.Shell_NotifyIconW(win32.NIM_ADD, &nid);
+
+    // Enable Alt+Tab hook by default
+    enableHook();
 }
 
 pub fn deinit() void {
