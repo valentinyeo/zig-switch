@@ -311,6 +311,8 @@ pub extern "user32" fn SetWindowsHookExW(idHook: i32, lpfn: HOOKPROC_LL, hmod: ?
 pub extern "user32" fn CallNextHookEx(hhk: ?HHOOK, nCode: i32, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) LRESULT;
 pub extern "user32" fn UnhookWindowsHookEx(hhk: HHOOK) callconv(.winapi) BOOL;
 pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
+pub extern "user32" fn PostThreadMessageW(idThread: DWORD, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
+pub extern "kernel32" fn GetCurrentThreadId() callconv(.winapi) DWORD;
 
 pub const WM_APP_ALTTAB: UINT = 0x8001; // Alt+Tab: show overlay + select next
 pub const WM_APP_ALTTAB_NEXT: UINT = 0x8002; // Tab while Alt held: cycle next

@@ -12,12 +12,11 @@ var hook_enabled: bool = false;
 var hook_handle: ?win32.HHOOK = null;
 var app_hinstance: ?win32.HINSTANCE = null;
 
-// Post message to overlay window instead of calling directly
-var target_hwnd: ?win32.HWND = null;
+var main_thread_id: win32.DWORD = 0;
 
-pub fn init(hInstance: ?win32.HINSTANCE, overlay: ?win32.HWND) void {
+pub fn init(hInstance: ?win32.HINSTANCE) void {
     app_hinstance = hInstance;
-    target_hwnd = overlay;
+    main_thread_id = win32.GetCurrentThreadId();
 
     const wc = win32.WNDCLASSEXW{
         .lpfnWndProc = trayWndProc,
@@ -161,8 +160,8 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
                 // Alt released while in Alt+Tab mode → activate selected
                 if (alttab_active) {
                     alttab_active = false;
-                    if (target_hwnd) |hwnd| {
-                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB_ACTIVATE, 0, 0);
+                    if (main_thread_id != 0) {
+                        _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_ACTIVATE, 0, 0);
                     }
                     // Consume Alt-up so Windows doesn't open the menu bar
                     return 1;
@@ -173,14 +172,12 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
         // Intercept Alt+Tab
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
-                if (target_hwnd) |hwnd| {
+                if (main_thread_id != 0) {
                     if (!alttab_active) {
-                        // First Alt+Tab: show overlay
                         alttab_active = true;
-                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB, 0, 0);
+                        _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB, 0, 0);
                     } else {
-                        // Subsequent Tab while Alt held: cycle next
-                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB_NEXT, 0, 0);
+                        _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_NEXT, 0, 0);
                     }
                 }
             }

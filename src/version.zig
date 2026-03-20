@@ -1,2 +1,2 @@
-pub const version = "0.3.1";
-pub const summary = "Fix Alt+Tab: consume Alt key to prevent menu bar activation";
+pub const version = "0.3.2";
+pub const summary = "Fix Alt+Tab: use thread messages instead of window messages";

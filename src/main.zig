@@ -22,8 +22,8 @@ pub fn main() void {
     const hInstance = win32.GetModuleHandleW(null);
     ui.init(hInstance, cfg);
 
-    // Create system tray icon (Alt+Tab hook is OFF by default)
-    tray.init(hInstance, ui.getHwnd());
+    // Create system tray icon (Alt+Tab hook ON by default)
+    tray.init(hInstance);
 
     // Message loop
     var msg: win32.MSG = undefined;
@@ -33,6 +33,12 @@ pub fn main() void {
 
         if (msg.message == win32.WM_HOTKEY) {
             ui.toggle();
+        } else if (msg.message == win32.WM_APP_ALTTAB) {
+            ui.altTabShow();
+        } else if (msg.message == win32.WM_APP_ALTTAB_NEXT) {
+            ui.altTabNext();
+        } else if (msg.message == win32.WM_APP_ALTTAB_ACTIVATE) {
+            ui.altTabActivate();
         } else {
             _ = win32.TranslateMessage(&msg);
             _ = win32.DispatchMessageW(&msg);

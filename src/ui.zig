@@ -137,6 +137,48 @@ pub fn isVisible() bool {
     return visible;
 }
 
+pub fn altTabShow() void {
+    const hwnd = overlay_hwnd orelse return;
+    if (!visible and !alttab_pending) {
+        current_mode = .switcher;
+        refreshCurrentMode();
+        if (filtered_count > 1) selected = 1;
+        alttab_pending = true;
+    }
+    _ = hwnd;
+}
+
+pub fn altTabNext() void {
+    const hwnd = overlay_hwnd orelse return;
+    if (alttab_pending and !visible) {
+        showOverlay(hwnd);
+    }
+    if (visible and filtered_count > 0) {
+        selected = if (selected >= filtered_count - 1) 0 else selected + 1;
+        if (selected < scroll_offset) scroll_offset = selected;
+        if (selected >= scroll_offset + cfg.max_visible_rows) {
+            scroll_offset = selected - cfg.max_visible_rows + 1;
+        }
+        _ = win32.InvalidateRect(hwnd, null, 0);
+    }
+}
+
+pub fn altTabActivate() void {
+    if (alttab_pending or visible) {
+        if (filtered_count > 0) {
+            const idx = filtered_indices[selected];
+            const target = windows[idx].hwnd;
+            if (visible) hide();
+            alttab_pending = false;
+            win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+            _ = win32.SetForegroundWindow(target);
+        } else {
+            if (visible) hide();
+            alttab_pending = false;
+        }
+    }
+}
+
 fn showOverlay(hwnd: win32.HWND) void {
     _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
     _ = win32.SetForegroundWindow(hwnd);
@@ -320,48 +362,6 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
         },
         win32.WM_LBUTTONDOWN => {
             handleClick(hwnd, lParam);
-            return 0;
-        },
-        win32.WM_APP_ALTTAB => {
-            // First Alt+Tab: prepare data but DON'T show overlay yet
-            if (!visible and !alttab_pending) {
-                current_mode = .switcher;
-                refreshCurrentMode();
-                if (filtered_count > 1) selected = 1;
-                alttab_pending = true;
-            }
-            return 0;
-        },
-        win32.WM_APP_ALTTAB_NEXT => {
-            // Second+ Tab while Alt held: NOW show overlay and cycle
-            if (alttab_pending and !visible) {
-                showOverlay(hwnd);
-            }
-            if (visible and filtered_count > 0) {
-                selected = if (selected >= filtered_count - 1) 0 else selected + 1;
-                if (selected < scroll_offset) scroll_offset = selected;
-                if (selected >= scroll_offset + cfg.max_visible_rows) {
-                    scroll_offset = selected - cfg.max_visible_rows + 1;
-                }
-                _ = win32.InvalidateRect(hwnd, null, 0);
-            }
-            return 0;
-        },
-        win32.WM_APP_ALTTAB_ACTIVATE => {
-            // Alt released: switch to selected
-            if (alttab_pending or visible) {
-                if (filtered_count > 0) {
-                    const idx = filtered_indices[selected];
-                    const target = windows[idx].hwnd;
-                    if (visible) hide();
-                    alttab_pending = false;
-                    win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
-                    _ = win32.SetForegroundWindow(target);
-                } else {
-                    if (visible) hide();
-                    alttab_pending = false;
-                }
-            }
             return 0;
         },
         win32.WM_ACTIVATE => {
