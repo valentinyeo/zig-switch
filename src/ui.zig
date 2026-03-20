@@ -215,7 +215,6 @@ fn showOverlay(hwnd: win32.HWND) void {
     _ = win32.SetForegroundWindow(hwnd);
     _ = win32.SetFocus(hwnd);
     visible = true;
-    alttab_pending = false;
     _ = win32.InvalidateRect(hwnd, null, 0);
 }
 

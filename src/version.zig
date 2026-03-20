@@ -1,2 +1,2 @@
-pub const version = "0.3.9";
-pub const summary = "Fix Space→search: intercept in hook since overlay lacks focus";
+pub const version = "0.4.0";
+pub const summary = "Fix build error, all features now actually compiled";
