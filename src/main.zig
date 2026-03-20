@@ -17,8 +17,6 @@ pub fn main() void {
         return;
     }
 
-    // Register Alt+Space = launcher mode
-    _ = win32.RegisterHotKey(null, 2, win32.MOD_ALT, win32.VK_SPACE);
 
     // Create overlay window
     const hInstance = win32.GetModuleHandleW(null);
@@ -34,11 +32,7 @@ pub fn main() void {
         if (ret == 0 or ret == -1) break;
 
         if (msg.message == win32.WM_HOTKEY) {
-            if (msg.wParam == 2) {
-                ui.toggleLauncher();
-            } else {
-                ui.toggle();
-            }
+            ui.toggle();
         } else {
             _ = win32.TranslateMessage(&msg);
             _ = win32.DispatchMessageW(&msg);
@@ -47,7 +41,6 @@ pub fn main() void {
 
     tray.deinit();
     _ = win32.UnregisterHotKey(null, 1);
-    _ = win32.UnregisterHotKey(null, 2);
 }
 
 fn toWide(comptime s: []const u8) [*:0]const u16 {
