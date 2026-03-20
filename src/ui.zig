@@ -87,7 +87,7 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
 
     const screen_w = win32.GetSystemMetrics(win32.SM_CXSCREEN);
     const screen_h = win32.GetSystemMetrics(win32.SM_CYSCREEN);
-    const width: i32 = @divTrunc(screen_w, 2);
+    const width: i32 = @divTrunc(screen_w * 3, 10);
     const max_rows: i32 = @intCast(cfg.max_visible_rows);
     const height: i32 = 2 + SEARCH_HEIGHT + PADDING + max_rows * ROW_HEIGHT + PADDING;
     const x = @divTrunc(screen_w - width, 2);
@@ -289,6 +289,10 @@ fn activateSelected() void {
     }
 }
 
+pub fn getHwnd() ?win32.HWND {
+    return overlay_hwnd;
+}
+
 fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
     switch (msg) {
         win32.WM_PAINT => {
@@ -304,6 +308,14 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             handleChar(hwnd, wParam);
             return 0;
         },
+        win32.WM_LBUTTONDOWN => {
+            handleClick(hwnd, lParam);
+            return 0;
+        },
+        win32.WM_APP_ALTTAB => {
+            toggle();
+            return 0;
+        },
         win32.WM_ACTIVATE => {
             if (wParam == win32.WA_INACTIVE and visible) hide();
             return 0;
@@ -313,6 +325,22 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         else => return win32.DefWindowProcW(hwnd, msg, wParam, lParam),
+    }
+}
+
+fn handleClick(hwnd: win32.HWND, lParam: win32.LPARAM) void {
+    const mouse_y: i32 = @intCast((lParam >> 16) & 0xFFFF);
+    const list_top: i32 = 2 + SEARCH_HEIGHT + PADDING;
+
+    if (mouse_y < list_top) return; // Clicked in search area
+
+    const row_offset = @divTrunc(mouse_y - list_top, ROW_HEIGHT);
+    const clicked_idx = scroll_offset + @as(usize, @intCast(row_offset));
+
+    if (clicked_idx < filtered_count) {
+        selected = clicked_idx;
+        _ = win32.InvalidateRect(hwnd, null, 0);
+        activateSelected();
     }
 }
 
@@ -545,16 +573,17 @@ fn paint(hwnd: win32.HWND) void {
             const text_y = y + (ROW_HEIGHT - 16) / 2;
 
             switch (current_mode) {
-                .switcher => paintWindowRow(mem_dc, data_idx, text_y),
-                .launcher => paintLauncherRow(mem_dc, data_idx, text_y),
+                .switcher => paintWindowRow(mem_dc, data_idx, text_y, width),
+                .launcher => paintLauncherRow(mem_dc, data_idx, text_y, width),
                 .bookmarks_ => paintBookmarkRow(mem_dc, data_idx, text_y, width),
             }
         }
     }
 }
 
-fn paintWindowRow(mem_dc: win32.HDC, idx: usize, text_y: i32) void {
+fn paintWindowRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG) void {
     const w = &windows[idx];
+    const max_chars: usize = @intCast(@divTrunc(width - PADDING * 2 - ICON_SIZE - 6, 8));
 
     if (w.icon) |icon| {
         _ = win32.DrawIconEx(mem_dc, PADDING, text_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
@@ -562,24 +591,31 @@ fn paintWindowRow(mem_dc: win32.HDC, idx: usize, text_y: i32) void {
 
     const text_x = PADDING + ICON_SIZE + 6;
     _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-    if (w.exe_name_len > 0) {
-        _ = win32.TextOutW(mem_dc, text_x, text_y, &w.exe_name, @intCast(w.exe_name_len));
+    const exe_show = @min(w.exe_name_len, max_chars);
+    if (exe_show > 0) {
+        _ = win32.TextOutW(mem_dc, text_x, text_y, &w.exe_name, @intCast(exe_show));
     }
 
+    const used = exe_show + 3; // exe + separator
+    if (used >= max_chars) return;
+
     const sep = comptime toWide(" \u{2014} ");
-    const sep_x = text_x + @as(i32, @intCast(w.exe_name_len)) * 8;
+    const sep_x = text_x + @as(i32, @intCast(exe_show)) * 8;
     _ = win32.TextOutW(mem_dc, sep_x, text_y, sep, 3);
 
     const title_x = sep_x + 3 * 8;
+    const title_max = max_chars - used;
+    const title_show = @min(w.title_len, title_max);
     _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
-    if (w.title_len > 0) {
-        _ = win32.TextOutW(mem_dc, title_x, text_y, &w.title, @intCast(w.title_len));
+    if (title_show > 0) {
+        _ = win32.TextOutW(mem_dc, title_x, text_y, &w.title, @intCast(title_show));
     }
 }
 
-fn paintLauncherRow(mem_dc: win32.HDC, idx: usize, text_y: i32) void {
+fn paintLauncherRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG) void {
     const items = launcher.getItems();
     const item = &items[idx];
+    const max_chars: usize = @intCast(@divTrunc(width - PADDING * 2 - ICON_SIZE - 6, 8));
 
     if (item.icon) |icon| {
         _ = win32.DrawIconEx(mem_dc, PADDING, text_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
@@ -587,8 +623,9 @@ fn paintLauncherRow(mem_dc: win32.HDC, idx: usize, text_y: i32) void {
 
     const text_x = PADDING + ICON_SIZE + 6;
     _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
-    if (item.name_len > 0) {
-        _ = win32.TextOutW(mem_dc, text_x, text_y, &item.name, @intCast(item.name_len));
+    const show_len = @min(item.name_len, max_chars);
+    if (show_len > 0) {
+        _ = win32.TextOutW(mem_dc, text_x, text_y, &item.name, @intCast(show_len));
     }
 }
 

@@ -342,6 +342,7 @@ pub const NIF_MESSAGE: UINT = 0x00000001;
 pub const NIF_ICON: UINT = 0x00000002;
 pub const NIF_TIP: UINT = 0x00000004;
 
+pub const WM_LBUTTONDOWN: UINT = 0x0201;
 pub const WM_APP_TRAY: UINT = 0x8010;
 pub const WM_RBUTTONUP: UINT = 0x0205;
 pub const WM_LBUTTONDBLCLK: UINT = 0x0203;
@@ -358,6 +359,7 @@ pub extern "user32" fn GetCursorPos(lpPoint: *POINT) callconv(.winapi) BOOL;
 
 pub const MF_STRING: UINT = 0x00000000;
 pub const MF_CHECKED: UINT = 0x00000008;
+pub const MF_GRAYED: UINT = 0x00000001;
 pub const MF_SEPARATOR: UINT = 0x00000800;
 pub const TPM_BOTTOMALIGN: UINT = 0x0020;
 pub const TPM_LEFTALIGN: UINT = 0x0000;

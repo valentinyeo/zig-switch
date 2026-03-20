@@ -25,7 +25,7 @@ pub fn main() void {
     ui.init(hInstance, cfg);
 
     // Create system tray icon (Alt+Tab hook is OFF by default)
-    tray.init(hInstance, &onAltTab);
+    tray.init(hInstance, ui.getHwnd());
 
     // Message loop
     var msg: win32.MSG = undefined;
@@ -48,10 +48,6 @@ pub fn main() void {
     tray.deinit();
     _ = win32.UnregisterHotKey(null, 1);
     _ = win32.UnregisterHotKey(null, 2);
-}
-
-fn onAltTab() void {
-    ui.toggle();
 }
 
 fn toWide(comptime s: []const u8) [*:0]const u16 {

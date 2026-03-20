@@ -1,5 +1,6 @@
 const std = @import("std");
 const win32 = @import("win32.zig");
+const ver = @import("version.zig");
 
 const TRAY_CLASS = toWide("ZigSwitchTray");
 const ID_TOGGLE_HOOK: usize = 1001;
@@ -11,12 +12,12 @@ var hook_enabled: bool = false;
 var hook_handle: ?win32.HHOOK = null;
 var app_hinstance: ?win32.HINSTANCE = null;
 
-// Callback for Alt+Tab trigger
-var on_alttab: ?*const fn () void = null;
+// Post message to overlay window instead of calling directly
+var target_hwnd: ?win32.HWND = null;
 
-pub fn init(hInstance: ?win32.HINSTANCE, alttab_callback: *const fn () void) void {
+pub fn init(hInstance: ?win32.HINSTANCE, overlay: ?win32.HWND) void {
     app_hinstance = hInstance;
-    on_alttab = alttab_callback;
+    target_hwnd = overlay;
 
     const wc = win32.WNDCLASSEXW{
         .lpfnWndProc = trayWndProc,
@@ -102,6 +103,10 @@ fn showMenu(hwnd: win32.HWND) void {
         comptime toWide("Enable Alt+Tab Hook");
     const label_flags: win32.UINT = win32.MF_STRING | (if (hook_enabled) win32.MF_CHECKED else 0);
 
+    // Version header (grayed out, just info)
+    _ = win32.AppendMenuW(menu, win32.MF_GRAYED, 0, comptime toWide("ZigSwitch v" ++ ver.version));
+    _ = win32.AppendMenuW(menu, win32.MF_GRAYED, 0, comptime toWide(ver.summary));
+    _ = win32.AppendMenuW(menu, win32.MF_SEPARATOR, 0, null);
     _ = win32.AppendMenuW(menu, label_flags, ID_TOGGLE_HOOK, label);
     _ = win32.AppendMenuW(menu, win32.MF_SEPARATOR, 0, null);
     _ = win32.AppendMenuW(menu, win32.MF_STRING, ID_QUIT, comptime toWide("Quit ZigSwitch"));
@@ -152,12 +157,13 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
             }
         }
 
-        // Intercept Alt+Tab
+        // Intercept Alt+Tab - post message to overlay window
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
-                if (on_alttab) |cb| cb();
+                if (target_hwnd) |hwnd| {
+                    _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB, 0, 0);
+                }
             }
-            // Consume the Tab keypress so Windows doesn't get it
             return 1;
         }
     }
