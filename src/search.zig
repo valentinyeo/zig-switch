@@ -91,7 +91,7 @@ pub fn applyFilter(
     count: usize,
     search: []const u16,
     cluster_exe: ?[]const u16,
-    out_indices: *[window_enum.MAX_WINDOWS]usize,
+    out_indices: []usize,
 ) usize {
     var out_count: usize = 0;
 
@@ -110,6 +110,7 @@ pub fn applyFilter(
             if (!title_match and !exe_match) continue;
         }
 
+        if (out_count >= out_indices.len) break;
         out_indices[out_count] = i;
         out_count += 1;
     }

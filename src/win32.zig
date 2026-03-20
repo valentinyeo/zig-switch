@@ -246,6 +246,30 @@ pub extern "kernel32" fn GetModuleFileNameW(hModule: ?HINSTANCE, lpFilename: [*]
 
 // Shell32 functions
 pub extern "shell32" fn ExtractIconExW(lpszFile: [*:0]const u16, nIconIndex: i32, phiconLarge: ?*?HICON, phiconSmall: ?*?HICON, nIcons: UINT) callconv(.winapi) UINT;
+pub extern "shell32" fn ShellExecuteW(hwnd: ?HWND, lpOperation: ?[*:0]const u16, lpFile: [*:0]const u16, lpParameters: ?[*:0]const u16, lpDirectory: ?[*:0]const u16, nShowCmd: i32) callconv(.winapi) isize;
+
+// Kernel32 file search
+pub const WIN32_FIND_DATAW = extern struct {
+    dwFileAttributes: DWORD = 0,
+    ftCreationTime: u64 = 0,
+    ftLastAccessTime: u64 = 0,
+    ftLastWriteTime: u64 = 0,
+    nFileSizeHigh: DWORD = 0,
+    nFileSizeLow: DWORD = 0,
+    dwReserved0: DWORD = 0,
+    dwReserved1: DWORD = 0,
+    cFileName: [260]u16 = [_]u16{0} ** 260,
+    cAlternateFileName: [14]u16 = [_]u16{0} ** 14,
+};
+
+pub const FILE_ATTRIBUTE_DIRECTORY: DWORD = 0x10;
+pub const INVALID_HANDLE_VALUE_INT: usize = @as(usize, @bitCast(@as(isize, -1)));
+pub const INVALID_HANDLE_VALUE: HANDLE = @ptrFromInt(INVALID_HANDLE_VALUE_INT);
+
+pub extern "kernel32" fn FindFirstFileW(lpFileName: [*:0]const u16, lpFindFileData: *WIN32_FIND_DATAW) callconv(.winapi) HANDLE;
+pub extern "kernel32" fn FindNextFileW(hFindFile: HANDLE, lpFindFileData: *WIN32_FIND_DATAW) callconv(.winapi) BOOL;
+pub extern "kernel32" fn FindClose(hFindFile: HANDLE) callconv(.winapi) BOOL;
+pub extern "kernel32" fn ExpandEnvironmentStringsW(lpSrc: [*:0]const u16, lpDst: *[512]u16, nSize: DWORD) callconv(.winapi) DWORD;
 
 // Low-level keyboard hook
 pub const HHOOK = *opaque {};
@@ -277,6 +301,7 @@ pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lPar
 
 pub const WM_APP_ALTTAB: UINT = 0x8001; // Custom message for alt-tab trigger
 pub const WM_APP_TAB: UINT = 0x8002; // Custom message for tab while overlay visible
+pub const WM_APP_CTRLTAB: UINT = 0x8003; // Custom message for ctrl+tab mode switch
 
 // DPI
 pub extern "user32" fn SetProcessDpiAwarenessContext(value: isize) callconv(.winapi) BOOL;
