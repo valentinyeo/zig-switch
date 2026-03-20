@@ -1,2 +1,2 @@
-pub const version = "0.3.3";
-pub const summary = "Classic Alt+Tab: show immediately, release Alt to switch";
+pub const version = "0.3.4";
+pub const summary = "Alt+Shift+Tab goes up in the list";

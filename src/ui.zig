@@ -148,6 +148,24 @@ pub fn altTabShow() void {
     }
 }
 
+pub fn altTabPrev() void {
+    const hwnd = overlay_hwnd orelse return;
+    if (!visible) {
+        alttab_mode = true;
+        current_mode = .switcher;
+        refreshCurrentMode();
+        if (filtered_count > 1) selected = filtered_count - 1;
+        showOverlay(hwnd);
+    } else if (filtered_count > 0) {
+        selected = if (selected == 0) filtered_count - 1 else selected - 1;
+        if (selected < scroll_offset) scroll_offset = selected;
+        if (selected >= scroll_offset + cfg.max_visible_rows) {
+            scroll_offset = selected - cfg.max_visible_rows + 1;
+        }
+        _ = win32.InvalidateRect(hwnd, null, 0);
+    }
+}
+
 pub fn altTabNext() void {
     const hwnd = overlay_hwnd orelse return;
     if (visible and filtered_count > 0) {

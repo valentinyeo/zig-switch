@@ -37,6 +37,8 @@ pub fn main() void {
             ui.altTabShow();
         } else if (msg.message == win32.WM_APP_ALTTAB_NEXT) {
             ui.altTabNext();
+        } else if (msg.message == win32.WM_APP_ALTTAB_PREV) {
+            ui.altTabPrev();
         } else if (msg.message == win32.WM_APP_ALTTAB_ACTIVATE) {
             ui.altTabActivate();
         } else {

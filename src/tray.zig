@@ -173,11 +173,20 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
                 if (main_thread_id != 0) {
+                    const shift = (win32.GetKeyState(win32.VK_SHIFT) < 0);
                     if (!alttab_active) {
                         alttab_active = true;
-                        _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB, 0, 0);
+                        if (shift) {
+                            _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_PREV, 0, 0);
+                        } else {
+                            _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB, 0, 0);
+                        }
                     } else {
-                        _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_NEXT, 0, 0);
+                        if (shift) {
+                            _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_PREV, 0, 0);
+                        } else {
+                            _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_NEXT, 0, 0);
+                        }
                     }
                 }
             }
