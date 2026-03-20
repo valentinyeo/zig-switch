@@ -268,6 +268,7 @@ pub extern "user32" fn UnhookWindowsHookEx(hhk: HHOOK) callconv(.winapi) BOOL;
 pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
 
 pub const WM_APP_ALTTAB: UINT = 0x8001; // Custom message for alt-tab trigger
+pub const WM_APP_TAB: UINT = 0x8002; // Custom message for tab while overlay visible
 
 // DPI
 pub extern "user32" fn SetProcessDpiAwarenessContext(value: isize) callconv(.winapi) BOOL;

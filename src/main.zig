@@ -71,6 +71,10 @@ fn msgWndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: w
         ui.toggle();
         return 0;
     }
+    if (msg == win32.WM_APP_TAB) {
+        ui.cycleCluster();
+        return 0;
+    }
     return win32.DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
@@ -80,25 +84,40 @@ fn keyboardHookProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) call
     if (nCode == win32.HC_ACTION) {
         const kb: *const win32.KBDLLHOOKSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
 
-        // Detect Alt+Tab (key down only, not key up)
-        if (wParam == win32.WM_SYSKEYDOWN or wParam == win32.WM_KEYDOWN_HOOK) {
+        const is_keydown = (wParam == win32.WM_SYSKEYDOWN or wParam == win32.WM_KEYDOWN_HOOK);
+        const is_keyup = (wParam == win32.WM_KEYUP_HOOK or wParam == win32.WM_SYSKEYUP);
+
+        if (is_keydown) {
+            // Tab key handling
             if (kb.vkCode == win32.VK_TAB_U32) {
-                // Check if Alt is held (LLKHF_ALTDOWN flag)
+                if (ui.isVisible()) {
+                    // Overlay is open — swallow Tab and cycle clusters
+                    if (msg_hwnd) |hwnd| {
+                        _ = win32.PostMessageW(hwnd, win32.WM_APP_TAB, 0, 0);
+                    }
+                    return 1;
+                }
+                // Alt+Tab when overlay is not visible — open it
                 if (kb.flags & win32.LLKHF_ALTDOWN != 0) {
-                    // Swallow Alt+Tab, trigger our switcher
                     if (msg_hwnd) |hwnd| {
                         _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB, 0, 0);
                     }
-                    return 1; // Block the keystroke
+                    return 1;
+                }
+            }
+
+            // While overlay is visible, block Alt from triggering system menus
+            // but let all other keys pass through normally to the overlay window
+            if (ui.isVisible()) {
+                if (kb.vkCode == win32.VK_LMENU or kb.vkCode == win32.VK_RMENU) {
+                    return 1; // Block Alt keydown to prevent menu activation
                 }
             }
         }
 
-        // Also block the Alt key-up after we've intercepted Alt+Tab
-        // to prevent the system menu from appearing
-        if (wParam == win32.WM_KEYUP_HOOK or wParam == win32.WM_SYSKEYUP) {
+        // Block Alt key-up while overlay is visible to prevent system menu
+        if (is_keyup) {
             if (kb.vkCode == win32.VK_LMENU or kb.vkCode == win32.VK_RMENU) {
-                // Only block if our overlay is visible (we just triggered it)
                 if (ui.isVisible()) {
                     return 1;
                 }

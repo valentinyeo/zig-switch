@@ -115,6 +115,16 @@ pub fn toggle() void {
     }
 }
 
+pub fn cycleCluster() void {
+    const hwnd = overlay_hwnd orelse return;
+    if (cluster_count > 0) {
+        cluster_index = (cluster_index + 1) % (cluster_count + 1);
+    }
+    selected = 0;
+    refilter();
+    _ = win32.InvalidateRect(hwnd, null, 0);
+}
+
 pub fn isVisible() bool {
     return visible;
 }
