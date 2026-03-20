@@ -3,7 +3,7 @@ const win32 = @import("win32.zig");
 
 pub const Config = struct {
     hotkey_modifiers: u32 = win32.MOD_CONTROL,
-    hotkey_vk: u32 = win32.VK_SPACE,
+    hotkey_vk: u32 = win32.VK_SPACE_U32,
     cluster_threshold: usize = 3,
     max_visible_rows: usize = 15,
 };

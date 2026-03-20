@@ -119,7 +119,8 @@ pub const VK_BACK: WPARAM = 0x08;
 pub const VK_TAB: WPARAM = 0x09;
 pub const VK_UP: WPARAM = 0x26;
 pub const VK_DOWN: WPARAM = 0x28;
-pub const VK_SPACE: u32 = 0x20;
+pub const VK_SPACE: WPARAM = 0x20;
+pub const VK_SPACE_U32: u32 = 0x20;
 
 pub const MOD_ALT: u32 = 0x0001;
 pub const MOD_CONTROL: u32 = 0x0002;
