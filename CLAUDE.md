@@ -11,6 +11,8 @@ zig build run      # Build and run
 
 Target: Windows x86_64 (GNU ABI). Links user32, gdi32, kernel32, shell32. No external dependencies — pure Zig + Win32 API.
 
+**IMPORTANT: After every code change, you MUST kill the running zigswitch.exe process (by PID), rebuild, and relaunch.** The hotkey registration fails silently if an old instance is still running. Always verify with `tasklist | grep zigswitch` that the new PID is active. Bump `src/version.zig` with every change so the user can confirm the version from the tray menu.
+
 ## Architecture
 
 ZigSwitch is a hotkey-driven window switcher overlay for Windows with three modes:
@@ -19,13 +21,15 @@ ZigSwitch is a hotkey-driven window switcher overlay for Windows with three mode
 - **Launcher** (green) — scans Start Menu for .lnk shortcuts, Enter to launch
 - **Bookmarks** (purple) — parses Edge bookmarks JSON, Enter to open in browser
 
-**Activation**: Ctrl+Space shows overlay. Ctrl+Enter cycles modes. Escape dismisses.
+**Activation**: Ctrl+Space (search mode), Alt+Tab (classic switcher with release-to-activate). Shift+Space cycles modes. Escape dismisses.
 
 ### Module Responsibilities
 
 | Module | Role |
 |--------|------|
-| `main.zig` | Entry point: hotkey registration, Win32 message loop |
+| `main.zig` | Entry point: hotkey registration, Win32 message loop, Alt+Tab message dispatch |
+| `tray.zig` | System tray icon, right-click menu, Alt+Tab low-level keyboard hook |
+| `version.zig` | Version string and summary (bump with every change) |
 | `ui.zig` | All rendering (GDI double-buffered), keyboard input, mode/state management |
 | `win32.zig` | Win32 FFI bindings and type definitions |
 | `window_enum.zig` | Enumerates visible windows (titles, exe names, icons) |
