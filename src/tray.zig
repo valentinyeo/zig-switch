@@ -63,6 +63,10 @@ pub fn isHookEnabled() bool {
     return hook_enabled;
 }
 
+pub fn cancelAltTab() void {
+    alttab_active = false;
+}
+
 fn enableHook() void {
     if (hook_handle != null) return;
     hook_handle = win32.SetWindowsHookExW(

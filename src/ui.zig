@@ -5,6 +5,7 @@ const search = @import("search.zig");
 const config_mod = @import("config.zig");
 const launcher = @import("launcher.zig");
 const bookmarks = @import("bookmarks.zig");
+const tray = @import("tray.zig");
 
 // Modes
 const Mode = enum { switcher, launcher, bookmarks_ };
@@ -469,6 +470,18 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
             }
         },
         win32.VK_SPACE => {
+            if (alttab_mode) {
+                // Space in Alt+Tab mode → switch to search mode
+                alttab_mode = false;
+                tray.cancelAltTab(); // Tell hook Alt release shouldn't activate
+                win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+                search_len = 0;
+                @memset(&search_buf, 0);
+                selected = 0;
+                refilter();
+                _ = win32.InvalidateRect(hwnd, null, 0);
+                return; // Don't let space go to WM_CHAR
+            }
             const shift_down = (win32.GetKeyState(win32.VK_SHIFT) < 0);
             if (shift_down) {
                 current_mode = switch (current_mode) {
