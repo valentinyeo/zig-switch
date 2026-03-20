@@ -342,7 +342,14 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
         win32.VK_RETURN => {
             const ctrl_down = (win32.GetKeyState(win32.VK_CONTROL) < 0);
             if (ctrl_down) {
-                closeSelected(hwnd);
+                // Ctrl+Enter = switch mode
+                current_mode = switch (current_mode) {
+                    .switcher => .launcher,
+                    .launcher => .bookmarks_,
+                    .bookmarks_ => .switcher,
+                };
+                refreshCurrentMode();
+                _ = win32.InvalidateRect(hwnd, null, 0);
             } else {
                 activateSelected();
             }
@@ -364,13 +371,21 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
             }
         },
         win32.VK_TAB => {
+            // Tab = cycle clusters (switcher mode only)
             if (current_mode == .switcher) {
                 if (cluster_count > 0) {
                     cluster_index = (cluster_index + 1) % (cluster_count + 1);
                 }
                 selected = 0;
                 refilter();
-                _ = win32.InvalidateRect(hwnd, null, 0);
+            }
+            _ = win32.InvalidateRect(hwnd, null, 0);
+        },
+        0x51 => { // VK_Q
+            const ctrl_down = (win32.GetKeyState(win32.VK_CONTROL) < 0);
+            if (ctrl_down) {
+                closeSelected(hwnd);
+                return; // Don't let 'q' go to WM_CHAR
             }
         },
         win32.VK_BACK => {
@@ -387,7 +402,7 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
 }
 
 fn handleChar(hwnd: win32.HWND, char: win32.WPARAM) void {
-    if (char < 0x20) return;
+    if (char < 0x20) return; // Control characters (includes Ctrl+Q = 0x11)
     if (char == 0x7F) return;
 
     if (search_len < search_buf.len - 1) {
