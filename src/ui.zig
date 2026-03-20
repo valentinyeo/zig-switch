@@ -87,7 +87,7 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
 
     const screen_w = win32.GetSystemMetrics(win32.SM_CXSCREEN);
     const screen_h = win32.GetSystemMetrics(win32.SM_CYSCREEN);
-    const width: i32 = @divTrunc(screen_w * 8, 10);
+    const width: i32 = @divTrunc(screen_w * 6, 10);
     const max_rows: i32 = @intCast(cfg.max_visible_rows);
     const height: i32 = 2 + SEARCH_HEIGHT + PADDING + max_rows * ROW_HEIGHT + PADDING;
     const x = @divTrunc(screen_w - width, 2);
