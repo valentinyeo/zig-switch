@@ -248,8 +248,31 @@ fn refreshCurrentMode() void {
     refilter();
 }
 
+fn getEffectiveMode() Mode {
+    // "b:" prefix → bookmarks, "s:" prefix → start menu launcher
+    if (search_len >= 2 and search_buf[1] == ':') {
+        if (search_buf[0] == 'b' or search_buf[0] == 'B') return .bookmarks_;
+        if (search_buf[0] == 's' or search_buf[0] == 'S') return .launcher;
+    }
+    return current_mode;
+}
+
+fn getSearchQuery() []const u16 {
+    // Strip "b:" or "s:" prefix from search query
+    if (search_len >= 2 and search_buf[1] == ':' and
+        (search_buf[0] == 'b' or search_buf[0] == 'B' or
+        search_buf[0] == 's' or search_buf[0] == 'S'))
+    {
+        return search_buf[2..search_len];
+    }
+    return search_buf[0..search_len];
+}
+
 fn refilter() void {
-    switch (current_mode) {
+    const effective_mode = getEffectiveMode();
+    const query = getSearchQuery();
+
+    switch (effective_mode) {
         .switcher => {
             const cluster_exe: ?[]const u16 = if (cluster_index == 0)
                 null
@@ -259,7 +282,7 @@ fn refilter() void {
             filtered_count = search.applyFilter(
                 &windows,
                 window_count,
-                search_buf[0..search_len],
+                query,
                 cluster_exe,
                 &filtered_indices,
             );
@@ -268,7 +291,7 @@ fn refilter() void {
             filtered_count = 0;
             const items = launcher.getItems();
             for (items, 0..) |*item, i| {
-                if (search_len == 0 or search.matchesSearch(item.name[0..item.name_len], search_buf[0..search_len])) {
+                if (query.len == 0 or search.matchesSearch(item.name[0..item.name_len], query)) {
                     if (filtered_count < filtered_indices.len) {
                         filtered_indices[filtered_count] = i;
                         filtered_count += 1;
@@ -280,9 +303,9 @@ fn refilter() void {
             filtered_count = 0;
             const items = bookmarks.getItems();
             for (items, 0..) |*bm, i| {
-                if (search_len == 0 or
-                    search.matchesSearch(bm.name[0..bm.name_len], search_buf[0..search_len]) or
-                    matchesSearchU8(bm.url[0..bm.url_len], search_buf[0..search_len]))
+                if (query.len == 0 or
+                    search.matchesSearch(bm.name[0..bm.name_len], query) or
+                    matchesSearchU8(bm.url[0..bm.url_len], query))
                 {
                     if (filtered_count < filtered_indices.len) {
                         filtered_indices[filtered_count] = i;
@@ -354,7 +377,7 @@ fn activateSelected() void {
 
     const idx = filtered_indices[selected];
 
-    switch (current_mode) {
+    switch (getEffectiveMode()) {
         .switcher => {
             const target_hwnd = windows[idx].hwnd;
             _ = win32.SetForegroundWindow(target_hwnd);
@@ -553,7 +576,7 @@ fn paint(hwnd: win32.HWND) void {
     _ = win32.FillRect(mem_dc, &full_rect, bg_brush);
 
     // Mode accent top border (2px colored line)
-    const mode_idx = @intFromEnum(current_mode);
+    const mode_idx = @intFromEnum(getEffectiveMode());
     const accent_brush = win32.CreateSolidBrush(MODE_ACCENT[mode_idx]) orelse return;
     defer _ = win32.DeleteObject(@ptrCast(accent_brush));
     var accent_rect = win32.RECT{ .left = 0, .top = 0, .right = width, .bottom = 2 };
@@ -580,16 +603,8 @@ fn paint(hwnd: win32.HWND) void {
         _ = win32.TextOutW(mem_dc, PADDING + 4, search_y + 6, &search_buf, @intCast(search_len));
     } else {
         _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-        const placeholder = switch (current_mode) {
-            .switcher => comptime toWide("Type to search windows..."),
-            .launcher => comptime toWide("Type to search programs..."),
-            .bookmarks_ => comptime toWide("Type to search bookmarks..."),
-        };
-        const ph_len: i32 = switch (current_mode) {
-            .switcher => 25,
-            .launcher => 26,
-            .bookmarks_ => 27,
-        };
+        const placeholder = comptime toWide("Search... (b: bookmarks, s: start menu)");
+        const ph_len: i32 = 40;
         _ = win32.TextOutW(mem_dc, PADDING + 4, search_y + 6, placeholder, ph_len);
     }
 
@@ -635,12 +650,13 @@ fn paint(hwnd: win32.HWND) void {
 
     if (filtered_count == 0) {
         _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-        const no_match = switch (current_mode) {
+        const eff = getEffectiveMode();
+        const no_match = switch (eff) {
             .switcher => comptime toWide("No matching windows"),
             .launcher => comptime toWide("No matching programs"),
             .bookmarks_ => comptime toWide("No matching bookmarks"),
         };
-        const nm_len: i32 = switch (current_mode) {
+        const nm_len: i32 = switch (eff) {
             .switcher => 19,
             .launcher => 20,
             .bookmarks_ => 21,
@@ -669,7 +685,7 @@ fn paint(hwnd: win32.HWND) void {
 
             const text_y = y + (ROW_HEIGHT - 16) / 2;
 
-            switch (current_mode) {
+            switch (getEffectiveMode()) {
                 .switcher => paintWindowRow(mem_dc, data_idx, text_y, width),
                 .launcher => paintLauncherRow(mem_dc, data_idx, text_y, width),
                 .bookmarks_ => paintBookmarkRow(mem_dc, data_idx, text_y, width),

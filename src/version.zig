@@ -1,2 +1,2 @@
-pub const version = "0.4.4";
-pub const summary = "Fix Space→search: consume in hook to prevent ghost space char";
+pub const version = "0.5.0";
+pub const summary = "Search prefixes: b: for bookmarks, s: for start menu";
