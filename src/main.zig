@@ -8,6 +8,9 @@ pub fn main() void {
     // DPI awareness
     _ = win32.SetProcessDpiAwarenessContext(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
+    // Register to start with Windows
+    registerAutoStart();
+
     // Load config
     const cfg = config.loadConfig();
 
@@ -51,6 +54,24 @@ pub fn main() void {
 
     tray.deinit();
     _ = win32.UnregisterHotKey(null, 1);
+}
+
+fn registerAutoStart() void {
+    // Get our exe path
+    var path_buf: [512]u16 = [_]u16{0} ** 512;
+    const path_len = win32.GetModuleFileNameW(null, &path_buf, 512);
+    if (path_len == 0 or path_len >= 512) return;
+
+    // Open Run key
+    const sub_key = comptime toWide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    var hkey: win32.HKEY = undefined;
+    if (win32.RegOpenKeyExW(win32.HKEY_CURRENT_USER, sub_key, 0, win32.KEY_SET_VALUE, &hkey) != 0) return;
+    defer _ = win32.RegCloseKey(hkey);
+
+    // Set value (path as null-terminated wide string)
+    const value_name = comptime toWide("ZigSwitch");
+    const byte_len: win32.DWORD = @intCast((path_len + 1) * 2); // include null, in bytes
+    _ = win32.RegSetValueExW(hkey, value_name, 0, win32.REG_SZ, @ptrCast(&path_buf), byte_len);
 }
 
 fn toWide(comptime s: []const u8) [*:0]const u16 {

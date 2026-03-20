@@ -1,2 +1,2 @@
-pub const version = "0.5.1";
-pub const summary = "Fix bookmarks: open in Edge. Deduplicate start menu items";
+pub const version = "0.5.2";
+pub const summary = "Auto-start with Windows via registry Run key";

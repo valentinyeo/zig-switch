@@ -9,47 +9,61 @@ zig build          # Output: zig-out/bin/zigswitch.exe
 zig build run      # Build and run
 ```
 
-Target: Windows x86_64 (GNU ABI). Links user32, gdi32, kernel32, shell32. No external dependencies — pure Zig + Win32 API.
+Target: Windows x86_64 (GNU ABI). Links user32, gdi32, kernel32, shell32, advapi32. No external dependencies — pure Zig + Win32 API.
 
-**IMPORTANT: After every code change, you MUST kill the running zigswitch.exe process (by PID), rebuild, and relaunch.** The hotkey registration fails silently if an old instance is still running. Always verify with `tasklist | grep zigswitch` that the new PID is active. Bump `src/version.zig` with every change so the user can confirm the version from the tray menu.
+**IMPORTANT: After every code change:**
+1. `taskkill //F //IM zigswitch.exe` — kill the running process
+2. `sleep 2` — wait for hotkey registration to release
+3. `zig build 2>&1` — rebuild and **check for errors** (a failed build keeps the old binary!)
+4. Launch the new exe and verify with `tasklist | grep zigswitch` that a new PID is active
+5. Bump `src/version.zig` version + summary so user can confirm from tray right-click menu
 
 ## Architecture
 
-ZigSwitch is a hotkey-driven window switcher overlay for Windows with three modes:
+ZigSwitch is a hotkey-driven window switcher overlay for Windows.
 
-- **Switcher** (blue) — lists open windows, search by title/exe, Enter to focus, Ctrl+Q to close window
-- **Launcher** (green) — scans Start Menu for .lnk shortcuts, Enter to launch
-- **Bookmarks** (purple) — parses Edge bookmarks JSON, Enter to open in browser
+**Two activation modes:**
+- **Alt+Tab** — classic behavior: hold Alt, Tab cycles, release Alt switches. Space drops into search mode.
+- **Ctrl+Space** — opens directly in search mode with typing.
 
-**Activation**: Ctrl+Space (search mode), Alt+Tab (classic switcher with release-to-activate). Shift+Space cycles modes. Escape dismisses.
+**Search prefixes** (typed in search bar):
+- No prefix — search open windows (default)
+- `b:` — search Edge bookmarks, Enter opens in Edge
+- `s:` — search Start Menu programs, Enter launches
+
+**Keys:** Tab/Shift+Tab navigate, Enter activates, Ctrl+Q closes window, Escape dismisses.
 
 ### Module Responsibilities
 
 | Module | Role |
 |--------|------|
-| `main.zig` | Entry point: hotkey registration, Win32 message loop, Alt+Tab message dispatch |
+| `main.zig` | Entry point: hotkey registration, Win32 message loop, Alt+Tab message dispatch, auto-start registry |
 | `tray.zig` | System tray icon, right-click menu, Alt+Tab low-level keyboard hook |
 | `version.zig` | Version string and summary (bump with every change) |
 | `ui.zig` | All rendering (GDI double-buffered), keyboard input, mode/state management |
 | `win32.zig` | Win32 FFI bindings and type definitions |
-| `window_enum.zig` | Enumerates visible windows (titles, exe names, icons) |
-| `search.zig` | Case-insensitive UTF-16 substring matching, cluster filtering |
-| `launcher.zig` | Recursively scans Start Menu directories for .lnk files (depth 3) |
+| `window_enum.zig` | Enumerates visible windows (titles, exe names, icons) via EnumWindows (Z-order) |
+| `search.zig` | Case-insensitive UTF-16 substring matching |
+| `launcher.zig` | Recursively scans Start Menu directories for .lnk files, deduplicates by name |
 | `bookmarks.zig` | Parses Edge bookmarks JSON from `%LOCALAPPDATA%` |
-| `config.zig` | Configuration stub (hardcoded defaults, planned: config.ini) |
+| `config.zig` | Configuration stub (hardcoded defaults) |
 
 ### Key Patterns
 
 - **State**: Global mutable state lives in `ui.zig` (overlay_hwnd, mode, selection, search buffer, filtered indices)
-- **Lazy loading**: Launcher and bookmarks data only load when their mode is first activated
 - **Rendering**: Double-buffered GDI — create memory DC, draw everything, BitBlt to screen
-- **Search**: Real-time incremental filter on title + exe name (OR), with cluster grouping (threshold: 3+ windows from same app)
+- **Search**: `getEffectiveMode()` checks for `b:`/`s:` prefix, `getSearchQuery()` strips it. Refilter uses effective mode.
+- **Alt+Tab hook**: LL keyboard hook in `tray.zig`. Track Alt/Shift state manually (GetKeyState unreliable in LL hooks). Posts thread messages to main loop, NOT window messages. Hook must consume Alt key-up when alttab_active to prevent menu bar activation.
 - **DPI-aware**: Per-monitor DPI awareness v2
+- **Auto-start**: Registers in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` on every launch
 
-### Resources
+## Gotchas
 
-- `zigswitch.ico` — app icon
-- `zigswitch.rc` — resource file embedding the icon into the executable
+- `toWide()` converts byte-by-byte — only works for ASCII. Do NOT use Unicode chars like em dash.
+- VK constants: use `WPARAM` type for switch cases in handleKeyDown, use `u32`/`DWORD` for hook vkCode comparisons.
+- When Alt is held, Windows sends `WM_SYSKEYDOWN` not `WM_KEYDOWN` — wndProc must handle both.
+- The overlay may not have keyboard focus during Alt+Tab mode — intercept keys in the LL hook instead.
+- `hide()` must call `tray.cancelAltTab()` to reset hook state and prevent stuck hooks blocking system-wide typing.
 
 ## No Tests
 

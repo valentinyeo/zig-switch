@@ -377,6 +377,15 @@ pub extern "user32" fn keybd_event(bVk: u8, bScan: u8, dwFlags: DWORD, dwExtraIn
 pub const KEYEVENTF_KEYUP: DWORD = 0x0002;
 pub const VK_MENU: u8 = 0x12; // Alt key
 
+// Registry
+pub const HKEY = *opaque {};
+pub const HKEY_CURRENT_USER: HKEY = @ptrFromInt(0x80000001);
+pub const KEY_SET_VALUE: DWORD = 0x0002;
+pub const REG_SZ: DWORD = 1;
+pub extern "advapi32" fn RegOpenKeyExW(hKey: HKEY, lpSubKey: [*:0]const u16, ulOptions: DWORD, samDesired: DWORD, phkResult: *HKEY) callconv(.winapi) i32;
+pub extern "advapi32" fn RegSetValueExW(hKey: HKEY, lpValueName: [*:0]const u16, Reserved: DWORD, dwType: DWORD, lpData: [*]const u8, cbData: DWORD) callconv(.winapi) i32;
+pub extern "advapi32" fn RegCloseKey(hKey: HKEY) callconv(.winapi) i32;
+
 // DPI
 pub extern "user32" fn SetProcessDpiAwarenessContext(value: isize) callconv(.winapi) BOOL;
 

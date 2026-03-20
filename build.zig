@@ -25,6 +25,7 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("gdi32");
     exe.linkSystemLibrary("kernel32");
     exe.linkSystemLibrary("shell32");
+    exe.linkSystemLibrary("advapi32");
 
     b.installArtifact(exe);
 }
