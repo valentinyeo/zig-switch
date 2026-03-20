@@ -164,6 +164,8 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
                     if (target_hwnd) |hwnd| {
                         _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB_ACTIVATE, 0, 0);
                     }
+                    // Consume Alt-up so Windows doesn't open the menu bar
+                    return 1;
                 }
             }
         }
