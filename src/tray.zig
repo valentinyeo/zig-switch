@@ -195,8 +195,16 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
             alttab_active = false;
         }
 
-        // Space while in Alt+Tab mode → let it through to overlay window
-        // The UI handles the switch to search mode via WM_SYSKEYDOWN
+        // Space while in Alt+Tab mode → switch to search
+        if (kb.vkCode == win32.VK_SPACE_U32 and alttab_active) {
+            if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
+                alttab_active = false;
+                if (main_thread_id != 0) {
+                    _ = win32.PostThreadMessageW(main_thread_id, win32.WM_APP_ALTTAB_SEARCH, 0, 0);
+                }
+            }
+            return 1; // Consume so no space character is typed
+        }
 
         // Intercept Alt+Tab
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {

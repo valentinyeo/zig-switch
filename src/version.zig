@@ -1,2 +1,2 @@
-pub const version = "0.4.3";
-pub const summary = "Fix double-Space, hook safety reset, hide resets hook state";
+pub const version = "0.4.4";
+pub const summary = "Fix Space→search: consume in hook to prevent ghost space char";
