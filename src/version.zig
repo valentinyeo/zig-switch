@@ -1,2 +1,2 @@
-pub const version = "0.3.7";
-pub const summary = "Fix Alt+Shift+Tab: track Shift state in hook";
+pub const version = "0.3.8";
+pub const summary = "Handle WM_SYSKEYDOWN so keys work while Alt is held";

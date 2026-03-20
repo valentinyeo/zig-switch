@@ -384,7 +384,7 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_ERASEBKGND => return 1,
-        win32.WM_KEYDOWN => {
+        win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN_MSG => {
             handleKeyDown(hwnd, wParam);
             return 0;
         },

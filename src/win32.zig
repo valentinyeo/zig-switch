@@ -108,6 +108,7 @@ pub const WM_ACTIVATE: UINT = 0x0006;
 pub const WM_KEYDOWN: UINT = 0x0100;
 pub const WM_CHAR: UINT = 0x0102;
 pub const WM_HOTKEY: UINT = 0x0312;
+pub const WM_SYSKEYDOWN_MSG: UINT = 0x0104;
 pub const WM_GETICON: UINT = 0x007F;
 
 pub const WA_INACTIVE: WPARAM = 0;
