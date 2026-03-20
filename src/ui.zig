@@ -42,6 +42,7 @@ var overlay_hwnd: ?win32.HWND = null;
 var visible = false;
 var cfg: config_mod.Config = .{};
 var current_mode: Mode = .switcher;
+var alttab_pending = false; // Alt+Tab fired but overlay not shown yet
 
 // Switcher state
 var windows: [window_enum.MAX_WINDOWS]window_enum.WindowInfo = undefined;
@@ -134,6 +135,15 @@ fn toggleWithMode(mode: Mode) void {
 
 pub fn isVisible() bool {
     return visible;
+}
+
+fn showOverlay(hwnd: win32.HWND) void {
+    _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
+    _ = win32.SetForegroundWindow(hwnd);
+    _ = win32.SetFocus(hwnd);
+    visible = true;
+    alttab_pending = false;
+    _ = win32.InvalidateRect(hwnd, null, 0);
 }
 
 fn hide() void {
@@ -313,21 +323,20 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_APP_ALTTAB => {
-            // First Alt+Tab: show overlay with 2nd item selected
-            if (!visible) {
+            // First Alt+Tab: prepare data but DON'T show overlay yet
+            if (!visible and !alttab_pending) {
                 current_mode = .switcher;
                 refreshCurrentMode();
                 if (filtered_count > 1) selected = 1;
-                _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
-                _ = win32.SetForegroundWindow(hwnd);
-                _ = win32.SetFocus(hwnd);
-                visible = true;
-                _ = win32.InvalidateRect(hwnd, null, 0);
+                alttab_pending = true;
             }
             return 0;
         },
         win32.WM_APP_ALTTAB_NEXT => {
-            // Subsequent Tab while Alt held: cycle next
+            // Second+ Tab while Alt held: NOW show overlay and cycle
+            if (alttab_pending and !visible) {
+                showOverlay(hwnd);
+            }
             if (visible and filtered_count > 0) {
                 selected = if (selected >= filtered_count - 1) 0 else selected + 1;
                 if (selected < scroll_offset) scroll_offset = selected;
@@ -339,14 +348,19 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_APP_ALTTAB_ACTIVATE => {
-            // Alt released: activate selected and close
-            if (visible and filtered_count > 0) {
-                const idx = filtered_indices[selected];
-                const target = windows[idx].hwnd;
-                hide();
-                // Use keybd_event trick to allow SetForegroundWindow
-                win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
-                _ = win32.SetForegroundWindow(target);
+            // Alt released: switch to selected
+            if (alttab_pending or visible) {
+                if (filtered_count > 0) {
+                    const idx = filtered_indices[selected];
+                    const target = windows[idx].hwnd;
+                    if (visible) hide();
+                    alttab_pending = false;
+                    win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+                    _ = win32.SetForegroundWindow(target);
+                } else {
+                    if (visible) hide();
+                    alttab_pending = false;
+                }
             }
             return 0;
         },
