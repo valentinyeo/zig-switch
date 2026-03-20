@@ -209,6 +209,14 @@ pub extern "user32" fn LoadCursorW(hInstance: ?HINSTANCE, lpCursorName: usize) c
 pub extern "user32" fn SetTimer(hWnd: ?HWND, nIDEvent: usize, uElapse: UINT, lpTimerFunc: ?*anyopaque) callconv(.winapi) usize;
 pub extern "user32" fn KillTimer(hWnd: ?HWND, uIDEvent: usize) callconv(.winapi) BOOL;
 pub extern "user32" fn SetFocus(hWnd: ?HWND) callconv(.winapi) ?HWND;
+pub extern "user32" fn GetKeyState(nVirtKey: i32) callconv(.winapi) i16;
+
+pub const VK_CONTROL: i32 = 0x11;
+
+pub fn postClose(hwnd: HWND) void {
+    var result: usize = 0;
+    _ = SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG, 1000, &result);
+}
 
 pub const IDC_ARROW: usize = 32512;
 pub const LWA_ALPHA: DWORD = 0x00000002;

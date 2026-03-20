@@ -34,16 +34,16 @@ pub fn main() void {
         null, null, hInstance, null,
     );
 
-    // TODO: Re-enable Alt+Tab hook once edge cases are fixed
-    // kb_hook = win32.SetWindowsHookExW(win32.WH_KEYBOARD_LL, keyboardHookProc, hInstance, 0);
-    // if (kb_hook == null) {
-    //     _ = win32.MessageBoxW(
-    //         null,
-    //         toWide("Failed to install keyboard hook for Alt+Tab replacement."),
-    //         toWide("ZigSwitch Warning"),
-    //         win32.MB_OK | win32.MB_ICONERROR,
-    //     );
-    // }
+    // Install low-level keyboard hook to intercept Alt+Tab
+    kb_hook = win32.SetWindowsHookExW(win32.WH_KEYBOARD_LL, keyboardHookProc, hInstance, 0);
+    if (kb_hook == null) {
+        _ = win32.MessageBoxW(
+            null,
+            toWide("Failed to install keyboard hook for Alt+Tab replacement."),
+            toWide("ZigSwitch Warning"),
+            win32.MB_OK | win32.MB_ICONERROR,
+        );
+    }
 
     // Message loop
     var msg: win32.MSG = undefined;

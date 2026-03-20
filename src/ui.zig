@@ -158,6 +158,37 @@ fn refilter() void {
     scroll_offset = 0;
 }
 
+fn closeSelected(hwnd: win32.HWND) void {
+    if (filtered_count == 0) return;
+
+    const idx = filtered_indices[selected];
+    const target_hwnd = windows[idx].hwnd;
+
+    // Send WM_CLOSE to the target window
+    win32.postClose(target_hwnd);
+
+    // Re-enumerate and refresh the list after a short delay
+    // For now, just remove it from our list and repaint
+    window_count -= 1;
+    if (idx < window_count) {
+        var i = idx;
+        while (i < window_count) : (i += 1) {
+            windows[i] = windows[i + 1];
+        }
+    }
+
+    // Recompute clusters and refilter
+    cluster_count = search.computeClusters(&windows, window_count, cfg.cluster_threshold, &clusters);
+    if (cluster_index > cluster_count) cluster_index = 0;
+    refilter();
+
+    if (selected >= filtered_count and filtered_count > 0) {
+        selected = filtered_count - 1;
+    }
+
+    _ = win32.InvalidateRect(hwnd, null, 0);
+}
+
 fn activateSelected() void {
     if (filtered_count == 0) return;
 
@@ -206,7 +237,12 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
             hide();
         },
         win32.VK_RETURN => {
-            activateSelected();
+            const ctrl_down = (win32.GetKeyState(win32.VK_CONTROL) < 0);
+            if (ctrl_down) {
+                closeSelected(hwnd);
+            } else {
+                activateSelected();
+            }
         },
         win32.VK_UP => {
             if (selected > 0) {
