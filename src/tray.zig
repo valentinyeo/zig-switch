@@ -41,7 +41,7 @@ pub fn init(hInstance: ?win32.HINSTANCE, alttab_callback: *const fn () void) voi
     nid.uID = 1;
     nid.uFlags = win32.NIF_MESSAGE | win32.NIF_ICON | win32.NIF_TIP;
     nid.uCallbackMessage = win32.WM_APP_TRAY;
-    nid.hIcon = win32.LoadIconW(null, win32.IDI_APPLICATION);
+    nid.hIcon = win32.LoadIconW(hInstance, 1);
 
     const tip = "ZigSwitch - Alt+Tab: OFF";
     for (tip, 0..) |c, i| {
