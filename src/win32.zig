@@ -312,9 +312,9 @@ pub extern "user32" fn CallNextHookEx(hhk: ?HHOOK, nCode: i32, wParam: WPARAM, l
 pub extern "user32" fn UnhookWindowsHookEx(hhk: HHOOK) callconv(.winapi) BOOL;
 pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
 
-pub const WM_APP_ALTTAB: UINT = 0x8001; // Custom message for alt-tab trigger
-pub const WM_APP_TAB: UINT = 0x8002; // Custom message for tab while overlay visible
-pub const WM_APP_CTRLTAB: UINT = 0x8003; // Custom message for ctrl+tab mode switch
+pub const WM_APP_ALTTAB: UINT = 0x8001; // Alt+Tab: show overlay + select next
+pub const WM_APP_ALTTAB_NEXT: UINT = 0x8002; // Tab while Alt held: cycle next
+pub const WM_APP_ALTTAB_ACTIVATE: UINT = 0x8003; // Alt released: activate selected
 
 // Tray icon
 pub const NOTIFYICONDATAW = extern struct {

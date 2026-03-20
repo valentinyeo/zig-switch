@@ -146,6 +146,7 @@ fn trayWndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: 
 }
 
 var alt_held = false;
+var alttab_active = false; // true while Alt is held and overlay was opened via Alt+Tab
 
 fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
     if (nCode == win32.HC_ACTION) {
@@ -157,14 +158,28 @@ fn llKeyboardProc(nCode: i32, wParam: win32.WPARAM, lParam: win32.LPARAM) callco
                 alt_held = true;
             } else if (wParam == win32.WM_KEYUP_HOOK or wParam == win32.WM_SYSKEYUP) {
                 alt_held = false;
+                // Alt released while in Alt+Tab mode → activate selected
+                if (alttab_active) {
+                    alttab_active = false;
+                    if (target_hwnd) |hwnd| {
+                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB_ACTIVATE, 0, 0);
+                    }
+                }
             }
         }
 
-        // Intercept Alt+Tab - post message to overlay window
+        // Intercept Alt+Tab
         if (kb.vkCode == win32.VK_TAB_U32 and alt_held) {
             if (wParam == win32.WM_KEYDOWN_HOOK or wParam == win32.WM_SYSKEYDOWN) {
                 if (target_hwnd) |hwnd| {
-                    _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB, 0, 0);
+                    if (!alttab_active) {
+                        // First Alt+Tab: show overlay
+                        alttab_active = true;
+                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB, 0, 0);
+                    } else {
+                        // Subsequent Tab while Alt held: cycle next
+                        _ = win32.PostMessageW(hwnd, win32.WM_APP_ALTTAB_NEXT, 0, 0);
+                    }
                 }
             }
             return 1;

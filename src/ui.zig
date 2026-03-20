@@ -313,9 +313,36 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_APP_ALTTAB => {
-            // Release Alt so typing works in the overlay
-            win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
-            toggle();
+            // First Alt+Tab: show overlay with 2nd item selected
+            if (!visible) {
+                current_mode = .switcher;
+                refreshCurrentMode();
+                if (filtered_count > 1) selected = 1;
+                _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
+                _ = win32.SetForegroundWindow(hwnd);
+                _ = win32.SetFocus(hwnd);
+                visible = true;
+                _ = win32.InvalidateRect(hwnd, null, 0);
+            }
+            return 0;
+        },
+        win32.WM_APP_ALTTAB_NEXT => {
+            // Subsequent Tab while Alt held: cycle next
+            if (visible and filtered_count > 0) {
+                selected = if (selected >= filtered_count - 1) 0 else selected + 1;
+                if (selected < scroll_offset) scroll_offset = selected;
+                if (selected >= scroll_offset + cfg.max_visible_rows) {
+                    scroll_offset = selected - cfg.max_visible_rows + 1;
+                }
+                _ = win32.InvalidateRect(hwnd, null, 0);
+            }
+            return 0;
+        },
+        win32.WM_APP_ALTTAB_ACTIVATE => {
+            // Alt released: activate selected and close
+            if (visible) {
+                activateSelected();
+            }
             return 0;
         },
         win32.WM_ACTIVATE => {
