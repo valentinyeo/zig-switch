@@ -695,7 +695,7 @@ fn paintWindowRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG)
     const used = exe_show + 3; // exe + separator
     if (used >= max_chars) return;
 
-    const sep = comptime toWide(" \u{2014} ");
+    const sep = comptime toWide(" - ");
     const sep_x = text_x + @as(i32, @intCast(exe_show)) * 8;
     _ = win32.TextOutW(mem_dc, sep_x, text_y, sep, 3);
 

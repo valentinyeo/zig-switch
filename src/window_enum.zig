@@ -75,8 +75,17 @@ fn enumCallback(hwnd: win32.HWND, _: win32.LPARAM) callconv(.winapi) win32.BOOL 
             for (0..path_len) |i| {
                 if (path_buf[i] == '\\' or path_buf[i] == '/') last_slash = i + 1;
             }
-            const name_len = path_len - last_slash;
-            @memcpy(info.exe_name[0..name_len], path_buf[last_slash..path_len]);
+            var name_len = path_len - last_slash;
+            // Strip .exe suffix
+            if (name_len >= 4 and
+                (path_buf[last_slash + name_len - 4] == '.' or path_buf[last_slash + name_len - 4] == '.') and
+                (path_buf[last_slash + name_len - 3] == 'e' or path_buf[last_slash + name_len - 3] == 'E') and
+                (path_buf[last_slash + name_len - 2] == 'x' or path_buf[last_slash + name_len - 2] == 'X') and
+                (path_buf[last_slash + name_len - 1] == 'e' or path_buf[last_slash + name_len - 1] == 'E'))
+            {
+                name_len -= 4;
+            }
+            @memcpy(info.exe_name[0..name_len], path_buf[last_slash .. last_slash + name_len]);
             info.exe_name_len = name_len;
         }
     }
