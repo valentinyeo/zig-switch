@@ -313,6 +313,8 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_APP_ALTTAB => {
+            // Release Alt so typing works in the overlay
+            win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
             toggle();
             return 0;
         },

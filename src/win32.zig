@@ -364,6 +364,11 @@ pub const MF_SEPARATOR: UINT = 0x00000800;
 pub const TPM_BOTTOMALIGN: UINT = 0x0020;
 pub const TPM_LEFTALIGN: UINT = 0x0000;
 
+// Input simulation
+pub extern "user32" fn keybd_event(bVk: u8, bScan: u8, dwFlags: DWORD, dwExtraInfo: usize) callconv(.winapi) void;
+pub const KEYEVENTF_KEYUP: DWORD = 0x0002;
+pub const VK_MENU: u8 = 0x12; // Alt key
+
 // DPI
 pub extern "user32" fn SetProcessDpiAwarenessContext(value: isize) callconv(.winapi) BOOL;
 
