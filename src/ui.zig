@@ -203,6 +203,9 @@ pub fn altTabActivate() void {
             const target = windows[idx].hwnd;
             hide();
             win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
+            if (win32.IsIconic(target) != 0) {
+                _ = win32.ShowWindow(target, win32.SW_RESTORE);
+            }
             _ = win32.SetForegroundWindow(target);
         } else {
             hide();
@@ -380,6 +383,9 @@ fn activateSelected() void {
     switch (getEffectiveMode()) {
         .switcher => {
             const target_hwnd = windows[idx].hwnd;
+            if (win32.IsIconic(target_hwnd) != 0) {
+                _ = win32.ShowWindow(target_hwnd, win32.SW_RESTORE);
+            }
             _ = win32.SetForegroundWindow(target_hwnd);
             hide();
         },

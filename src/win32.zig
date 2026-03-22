@@ -129,6 +129,7 @@ pub const MOD_WIN: u32 = 0x0008;
 
 pub const SW_SHOW: i32 = 5;
 pub const SW_HIDE: i32 = 0;
+pub const SW_RESTORE: i32 = 9;
 
 pub const SM_CXSCREEN: i32 = 0;
 pub const SM_CYSCREEN: i32 = 1;
@@ -201,6 +202,7 @@ pub extern "user32" fn EnumWindows(lpEnumFunc: *const fn (HWND, LPARAM) callconv
 pub extern "user32" fn GetWindowTextW(hWnd: HWND, lpString: [*]u16, nMaxCount: i32) callconv(.winapi) i32;
 pub extern "user32" fn GetWindowTextLengthW(hWnd: HWND) callconv(.winapi) i32;
 pub extern "user32" fn IsWindowVisible(hWnd: HWND) callconv(.winapi) BOOL;
+pub extern "user32" fn IsIconic(hWnd: HWND) callconv(.winapi) BOOL;
 pub extern "user32" fn GetWindow(hWnd: HWND, uCmd: UINT) callconv(.winapi) ?HWND;
 pub extern "user32" fn GetWindowLongPtrW(hWnd: HWND, nIndex: i32) callconv(.winapi) isize;
 pub extern "user32" fn GetClassLongPtrW(hWnd: HWND, nIndex: i32) callconv(.winapi) usize;
