@@ -64,6 +64,7 @@ ZigSwitch is a hotkey-driven window switcher overlay for Windows.
 - When Alt is held, Windows sends `WM_SYSKEYDOWN` not `WM_KEYDOWN` — wndProc must handle both.
 - The overlay may not have keyboard focus during Alt+Tab mode — intercept keys in the LL hook instead.
 - `hide()` must call `tray.cancelAltTab()` to reset hook state and prevent stuck hooks blocking system-wide typing.
+- `SetForegroundWindow` alone won't restore minimized windows — always check `IsIconic()` and call `ShowWindow(SW_RESTORE)` first.
 
 ## No Tests
 
