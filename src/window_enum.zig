@@ -12,6 +12,7 @@ pub const WindowInfo = struct {
     exe_path: [512]u16 = [_]u16{0} ** 512,
     exe_path_len: usize = 0,
     icon: ?win32.HICON = null,
+    icon_owned: bool = false,
 };
 
 var enum_buf: *[MAX_WINDOWS]WindowInfo = undefined;
@@ -19,6 +20,7 @@ var enum_count: *usize = undefined;
 var skip_hwnd: ?win32.HWND = null;
 
 pub fn enumerateWindows(buf: *[MAX_WINDOWS]WindowInfo, count: *usize, skip: ?win32.HWND) void {
+    releaseOwnedIcons(buf, count.*);
     enum_buf = buf;
     enum_count = count;
     count.* = 0;
@@ -65,7 +67,7 @@ fn enumCallback(hwnd: win32.HWND, _: win32.LPARAM) callconv(.winapi) win32.BOOL 
         var path_buf: [512]u16 = [_]u16{0} ** 512;
         var path_size: win32.DWORD = 512;
         if (win32.QueryFullProcessImageNameW(proc, 0, &path_buf, &path_size) != 0) {
-            const path_len: usize = @intCast(path_size);
+            const path_len: usize = @min(@as(usize, @intCast(path_size)), info.exe_path.len);
             // Copy full path for icon extraction
             @memcpy(info.exe_path[0..path_len], path_buf[0..path_len]);
             info.exe_path_len = path_len;
@@ -85,13 +87,16 @@ fn enumCallback(hwnd: win32.HWND, _: win32.LPARAM) callconv(.winapi) win32.BOOL 
             {
                 name_len -= 4;
             }
-            @memcpy(info.exe_name[0..name_len], path_buf[last_slash .. last_slash + name_len]);
-            info.exe_name_len = name_len;
+            const exe_name_len = @min(name_len, info.exe_name.len);
+            @memcpy(info.exe_name[0..exe_name_len], path_buf[last_slash .. last_slash + exe_name_len]);
+            info.exe_name_len = exe_name_len;
         }
     }
 
     // Get icon
-    info.icon = getWindowIcon(hwnd, &info);
+    const icon_ref = getWindowIcon(hwnd, &info);
+    info.icon = icon_ref.handle;
+    info.icon_owned = icon_ref.owned;
 
     enum_buf[enum_count.*] = info;
     enum_count.* += 1;
@@ -99,25 +104,42 @@ fn enumCallback(hwnd: win32.HWND, _: win32.LPARAM) callconv(.winapi) win32.BOOL 
     return 1;
 }
 
-fn getWindowIcon(hwnd: win32.HWND, info: *const WindowInfo) ?win32.HICON {
+pub fn releaseOwnedIcons(buf: *[MAX_WINDOWS]WindowInfo, count: usize) void {
+    for (buf[0..count]) |*info| {
+        if (info.icon_owned) {
+            if (info.icon) |icon| {
+                _ = win32.DestroyIcon(icon);
+            }
+            info.icon = null;
+            info.icon_owned = false;
+        }
+    }
+}
+
+const IconRef = struct {
+    handle: ?win32.HICON = null,
+    owned: bool = false,
+};
+
+fn getWindowIcon(hwnd: win32.HWND, info: *const WindowInfo) IconRef {
     var result: usize = 0;
 
     // Try WM_GETICON ICON_SMALL2
     const ret1 = win32.SendMessageTimeoutW(hwnd, win32.WM_GETICON, win32.ICON_SMALL2, 0, win32.SMTO_ABORTIFHUNG, 100, &result);
     if (ret1 != 0 and result != 0) {
-        return @ptrFromInt(result);
+        return .{ .handle = @ptrFromInt(result) };
     }
 
     // Try WM_GETICON ICON_SMALL
     const ret2 = win32.SendMessageTimeoutW(hwnd, win32.WM_GETICON, win32.ICON_SMALL, 0, win32.SMTO_ABORTIFHUNG, 100, &result);
     if (ret2 != 0 and result != 0) {
-        return @ptrFromInt(result);
+        return .{ .handle = @ptrFromInt(result) };
     }
 
     // Try class icon
     const class_icon = win32.GetClassLongPtrW(hwnd, win32.GCLP_HICONSM);
     if (class_icon != 0) {
-        return @ptrFromInt(class_icon);
+        return .{ .handle = @ptrFromInt(class_icon) };
     }
 
     // Try extracting from exe
@@ -127,10 +149,10 @@ fn getWindowIcon(hwnd: win32.HWND, info: *const WindowInfo) ?win32.HICON {
         var small_icon: ?win32.HICON = null;
         const extracted = win32.ExtractIconExW(@ptrCast(&path_z), 0, null, &small_icon, 1);
         if (extracted > 0 and small_icon != null) {
-            return small_icon;
+            return .{ .handle = small_icon, .owned = true };
         }
     }
 
     // Default icon
-    return win32.LoadIconW(null, win32.IDI_APPLICATION);
+    return .{ .handle = win32.LoadIconW(null, win32.IDI_APPLICATION) };
 }

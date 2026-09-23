@@ -2,13 +2,16 @@ const std = @import("std");
 const win32 = @import("win32.zig");
 
 pub const MAX_ITEMS = 512;
+const MAX_NAME_LEN = 256;
+const MAX_PATH_LEN = 512;
 
 pub const LaunchItem = struct {
-    name: [256]u16 = [_]u16{0} ** 256,
+    name: [MAX_NAME_LEN]u16 = [_]u16{0} ** MAX_NAME_LEN,
     name_len: usize = 0,
-    path: [512]u16 = [_]u16{0} ** 512,
+    path: [MAX_PATH_LEN]u16 = [_]u16{0} ** MAX_PATH_LEN,
     path_len: usize = 0,
     icon: ?win32.HICON = null,
+    icon_owned: bool = false,
 };
 
 var items: [MAX_ITEMS]LaunchItem = undefined;
@@ -32,12 +35,17 @@ pub fn getCount() usize {
 }
 
 pub fn reload() void {
+    clearItems();
     loaded = false;
-    item_count = 0;
+}
+
+pub fn deinit() void {
+    clearItems();
 }
 
 pub fn launch(item: *const LaunchItem) void {
     if (item.path_len == 0) return;
+    if (item.path_len >= 513) return;
     var path_z: [513]u16 = [_]u16{0} ** 513;
     @memcpy(path_z[0..item.path_len], item.path[0..item.path_len]);
     const open = comptime blk: {
@@ -51,7 +59,7 @@ pub fn launch(item: *const LaunchItem) void {
 }
 
 fn loadStartMenuItems() void {
-    item_count = 0;
+    clearItems();
 
     // User Start Menu
     var user_path: [512]u16 = [_]u16{0} ** 512;
@@ -74,6 +82,7 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
 
     // Build search pattern: dir\*
     var pattern: [600]u16 = [_]u16{0} ** 600;
+    if (dir.len + 2 >= pattern.len) return;
     @memcpy(pattern[0..dir.len], dir);
     pattern[dir.len] = '\\';
     pattern[dir.len + 1] = '*';
@@ -100,15 +109,25 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
         if (find_data.dwFileAttributes & win32.FILE_ATTRIBUTE_DIRECTORY != 0) {
             // Recurse into subdirectory
             var subdir: [600]u16 = [_]u16{0} ** 600;
+            const subdir_len = dir.len + 1 + name_slice.len;
+            if (subdir_len > subdir.len) {
+                if (win32.FindNextFileW(handle, &find_data) == 0) break;
+                continue;
+            }
             @memcpy(subdir[0..dir.len], dir);
             subdir[dir.len] = '\\';
             @memcpy(subdir[dir.len + 1 .. dir.len + 1 + name_slice.len], name_slice);
-            scanDirectory(subdir[0 .. dir.len + 1 + name_slice.len], depth + 1);
+            scanDirectory(subdir[0..subdir_len], depth + 1);
         } else {
             // Check if it's a .lnk file
             if (endsWithLnk(name_slice)) {
                 if (item_count < MAX_ITEMS) {
                     const display_len = name_slice.len - 4; // Remove ".lnk"
+                    const full_len = dir.len + 1 + name_slice.len;
+                    if (display_len > MAX_NAME_LEN or full_len > MAX_PATH_LEN) {
+                        if (win32.FindNextFileW(handle, &find_data) == 0) break;
+                        continue;
+                    }
 
                     // Skip duplicates (same display name)
                     if (isDuplicate(name_slice[0..display_len])) {
@@ -120,8 +139,6 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
                     @memcpy(item.name[0..display_len], name_slice[0..display_len]);
                     item.name_len = display_len;
 
-                    // Full path
-                    const full_len = dir.len + 1 + name_slice.len;
                     @memcpy(item.path[0..dir.len], dir);
                     item.path[dir.len] = '\\';
                     @memcpy(item.path[dir.len + 1 .. full_len], name_slice);
@@ -134,6 +151,7 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
                     const result = win32.SHGetFileInfoW(@ptrCast(&path_z), 0, &sfi, @sizeOf(win32.SHFILEINFOW), win32.SHGFI_ICON | win32.SHGFI_SMALLICON);
                     if (result != 0 and sfi.hIcon != null) {
                         item.icon = sfi.hIcon;
+                        item.icon_owned = true;
                     }
 
                     items[item_count] = item;
@@ -144,6 +162,19 @@ fn scanDirectory(dir: []const u16, depth: usize) void {
 
         if (win32.FindNextFileW(handle, &find_data) == 0) break;
     }
+}
+
+fn clearItems() void {
+    for (items[0..item_count]) |*item| {
+        if (item.icon_owned) {
+            if (item.icon) |icon| {
+                _ = win32.DestroyIcon(icon);
+            }
+            item.icon = null;
+            item.icon_owned = false;
+        }
+    }
+    item_count = 0;
 }
 
 fn isDuplicate(name: []const u16) bool {

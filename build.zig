@@ -18,14 +18,18 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    // Embed application icon
-    exe.addWin32ResourceFile(.{ .file = b.path("zigswitch.rc") });
+    // Run as a background Windows app, not a console app.
+    exe.subsystem = .windows;
 
-    exe.linkSystemLibrary("user32");
-    exe.linkSystemLibrary("gdi32");
-    exe.linkSystemLibrary("kernel32");
-    exe.linkSystemLibrary("shell32");
-    exe.linkSystemLibrary("advapi32");
+    // Embed application icon
+    exe.root_module.addWin32ResourceFile(.{ .file = b.path("zigswitch.rc") });
+
+    exe.root_module.linkSystemLibrary("user32", .{});
+    exe.root_module.linkSystemLibrary("gdi32", .{});
+    exe.root_module.linkSystemLibrary("kernel32", .{});
+    exe.root_module.linkSystemLibrary("shell32", .{});
+    exe.root_module.linkSystemLibrary("advapi32", .{});
+    exe.root_module.linkSystemLibrary("dwmapi", .{});
 
     b.installArtifact(exe);
 }

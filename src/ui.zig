@@ -6,37 +6,42 @@ const config_mod = @import("config.zig");
 const launcher = @import("launcher.zig");
 const bookmarks = @import("bookmarks.zig");
 const tray = @import("tray.zig");
+const ver = @import("version.zig");
 
 // Modes
 const Mode = enum { switcher, launcher, bookmarks_ };
 
-// Mode colors (selection highlight)
-const MODE_COLORS = [3]win32.COLORREF{
-    win32.rgb(0x26, 0x4f, 0x78), // Switcher: blue
-    win32.rgb(0x2d, 0x5a, 0x1e), // Launcher: green
-    win32.rgb(0x5a, 0x2d, 0x6a), // Bookmarks: purple
-};
-
-// Mode border accent colors (top border)
+// Mode accent colors used for subtle selection markers.
 const MODE_ACCENT = [3]win32.COLORREF{
-    win32.rgb(0x3a, 0x7a, 0xc4), // Switcher: blue
-    win32.rgb(0x4a, 0x9a, 0x2e), // Launcher: green
-    win32.rgb(0x9a, 0x4a, 0xb4), // Bookmarks: purple
+    win32.rgb(0x60, 0x9d, 0xd8), // Switcher: blue
+    win32.rgb(0x6c, 0xb7, 0x6d), // Launcher: green
+    win32.rgb(0xc0, 0x7a, 0xd9), // Bookmarks: purple
 };
 
-
-// Colors
-const BG_COLOR = win32.rgb(0x1e, 0x1e, 0x1e);
-const TEXT_COLOR = win32.rgb(0xff, 0xff, 0xff);
-const DIM_COLOR = win32.rgb(0x88, 0x88, 0x88);
-const SEARCH_BG = win32.rgb(0x2d, 0x2d, 0x2d);
-const BORDER_COLOR = win32.rgb(0x3e, 0x3e, 0x3e);
+// Windows 11 dark surface colors.
+const BG_COLOR = win32.rgb(0x20, 0x20, 0x20);
+const SURFACE_COLOR = win32.rgb(0x2b, 0x2b, 0x2b);
+const SURFACE_BORDER = win32.rgb(0x3a, 0x3a, 0x3a);
+const SELECTION_COLOR = win32.rgb(0x33, 0x3a, 0x42);
+const TEXT_COLOR = win32.rgb(0xf3, 0xf3, 0xf3);
+const DIM_COLOR = win32.rgb(0xa0, 0xa0, 0xa0);
+const SUBTLE_COLOR = win32.rgb(0x72, 0x72, 0x72);
 
 // Layout
-const PADDING = 8;
+const PADDING = 12;
 const ICON_SIZE = 16;
-const ROW_HEIGHT = 24;
-const SEARCH_HEIGHT = 32;
+const ROW_HEIGHT = 32;
+const SEARCH_HEIGHT = 38;
+const LIST_GAP = 8;
+const CORNER_RADIUS = 10;
+const SEARCH_RADIUS = 8;
+const ROW_RADIUS = 7;
+const VERSION_FOOTER_HEIGHT = 18;
+const LIST_TOP = PADDING + SEARCH_HEIGHT + LIST_GAP;
+
+// Compact Windows 11 shell-style typography.
+const UI_FONT_SIZE = 12;
+const VERSION_FONT_SIZE = 10;
 
 // State
 var overlay_hwnd: ?win32.HWND = null;
@@ -64,22 +69,50 @@ var search_buf: [128]u16 = [_]u16{0} ** 128;
 var search_len: usize = 0;
 
 var font: ?win32.HFONT = null;
+var version_font: ?win32.HFONT = null;
+var overlay_width: i32 = 0;
 
 const CLASS_NAME = toWide("ZigSwitchOverlay");
 
 pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
     cfg = c;
 
-    const face = comptime toWide("Consolas");
+    const face = comptime toWide("Segoe UI Variable");
     font = win32.CreateFontW(
-        -16, 0, 0, 0, win32.FW_NORMAL, 0, 0, 0,
-        win32.DEFAULT_CHARSET, win32.OUT_DEFAULT_PRECIS,
-        win32.CLIP_DEFAULT_PRECIS, win32.CLEARTYPE_QUALITY,
-        win32.DEFAULT_PITCH | win32.FF_DONTCARE, face,
+        -UI_FONT_SIZE,
+        0,
+        0,
+        0,
+        win32.FW_NORMAL,
+        0,
+        0,
+        0,
+        win32.DEFAULT_CHARSET,
+        win32.OUT_DEFAULT_PRECIS,
+        win32.CLIP_DEFAULT_PRECIS,
+        win32.CLEARTYPE_QUALITY,
+        win32.DEFAULT_PITCH | win32.FF_DONTCARE,
+        face,
+    );
+    version_font = win32.CreateFontW(
+        -VERSION_FONT_SIZE,
+        0,
+        0,
+        0,
+        win32.FW_NORMAL,
+        0,
+        0,
+        0,
+        win32.DEFAULT_CHARSET,
+        win32.OUT_DEFAULT_PRECIS,
+        win32.CLIP_DEFAULT_PRECIS,
+        win32.CLEARTYPE_QUALITY,
+        win32.DEFAULT_PITCH | win32.FF_DONTCARE,
+        face,
     );
 
     const wc = win32.WNDCLASSEXW{
-        .style = win32.CS_HREDRAW | win32.CS_VREDRAW,
+        .style = win32.CS_HREDRAW | win32.CS_VREDRAW | win32.CS_DROPSHADOW,
         .lpfnWndProc = wndProc,
         .hInstance = hInstance,
         .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
@@ -89,9 +122,10 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
 
     const screen_w = win32.GetSystemMetrics(win32.SM_CXSCREEN);
     const screen_h = win32.GetSystemMetrics(win32.SM_CYSCREEN);
-    const width: i32 = @divTrunc(screen_w * 3, 10);
-    const max_rows: i32 = @intCast(cfg.max_visible_rows);
-    const height: i32 = 2 + SEARCH_HEIGHT + PADDING + max_rows * ROW_HEIGHT + PADDING;
+    overlay_width = clampI32(@divTrunc(screen_w, 3), 560, 720);
+    if (overlay_width > screen_w - 80) overlay_width = screen_w - 80;
+    const width = overlay_width;
+    const height = desiredOverlayHeight();
     const x = @divTrunc(screen_w - width, 2);
     const y = @divTrunc(screen_h - height, 3);
 
@@ -100,13 +134,154 @@ pub fn init(hInstance: ?win32.HINSTANCE, c: config_mod.Config) void {
         CLASS_NAME,
         comptime toWide("ZigSwitch"),
         win32.WS_POPUP,
-        x, y, width, height,
-        null, null, hInstance, null,
+        x,
+        y,
+        width,
+        height,
+        null,
+        null,
+        hInstance,
+        null,
     );
+
+    if (overlay_hwnd) |hwnd| {
+        applyRoundedCorners(hwnd, width, height);
+    }
 
     // Pre-load launcher and bookmark data
     _ = launcher.getCount();
     _ = bookmarks.getCount();
+}
+
+pub fn deinit() void {
+    window_enum.releaseOwnedIcons(&windows, window_count);
+    window_count = 0;
+    launcher.deinit();
+    if (font) |f| {
+        _ = win32.DeleteObject(@ptrCast(f));
+        font = null;
+    }
+    if (version_font) |vf| {
+        _ = win32.DeleteObject(@ptrCast(vf));
+        version_font = null;
+    }
+}
+
+fn clampI32(value: i32, min_value: i32, max_value: i32) i32 {
+    if (value < min_value) return min_value;
+    if (value > max_value) return max_value;
+    return value;
+}
+
+fn visibleRowCount() i32 {
+    const max_rows: i32 = @intCast(cfg.max_visible_rows);
+    if (filtered_count == 0) return 1;
+    const count: i32 = @intCast(@min(filtered_count, cfg.max_visible_rows));
+    return @max(1, @min(count, max_rows));
+}
+
+fn desiredOverlayHeight() i32 {
+    return LIST_TOP + visibleRowCount() * ROW_HEIGHT + PADDING + VERSION_FOOTER_HEIGHT;
+}
+
+fn updateOverlayLayout(hwnd: win32.HWND) void {
+    const screen_w = win32.GetSystemMetrics(win32.SM_CXSCREEN);
+    const screen_h = win32.GetSystemMetrics(win32.SM_CYSCREEN);
+    if (overlay_width == 0) {
+        overlay_width = clampI32(@divTrunc(screen_w, 3), 560, 720);
+    }
+    if (overlay_width > screen_w - 80) overlay_width = screen_w - 80;
+
+    const width = overlay_width;
+    const height = desiredOverlayHeight();
+    const x = @divTrunc(screen_w - width, 2);
+    const y = @divTrunc(screen_h - height, 3);
+    _ = win32.SetWindowPos(hwnd, null, x, y, width, height, win32.SWP_NOZORDER | win32.SWP_NOACTIVATE);
+    applyRoundedCorners(hwnd, width, height);
+}
+
+fn applyRoundedCorners(hwnd: win32.HWND, width: i32, height: i32) void {
+    var corner_preference: win32.DWORD = win32.DWMWCP_ROUND;
+    const hr = win32.DwmSetWindowAttribute(
+        hwnd,
+        win32.DWMWA_WINDOW_CORNER_PREFERENCE,
+        @ptrCast(&corner_preference),
+        @sizeOf(win32.DWORD),
+    );
+    if (hr == 0) return;
+
+    // Fallback for systems where DWM corner preference is unavailable.
+    const diameter = CORNER_RADIUS * 2;
+    const region = win32.CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter) orelse return;
+    if (win32.SetWindowRgn(hwnd, region, 1) == 0) {
+        _ = win32.DeleteObject(@ptrCast(region));
+    }
+}
+
+fn focusOverlay(hwnd: win32.HWND) void {
+    updateOverlayLayout(hwnd);
+    _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
+
+    const current_thread = win32.GetCurrentThreadId();
+    var attached_thread: win32.DWORD = 0;
+
+    if (win32.GetForegroundWindow()) |foreground| {
+        var foreground_pid: win32.DWORD = 0;
+        const foreground_thread = win32.GetWindowThreadProcessId(foreground, &foreground_pid);
+        if (foreground_thread != 0 and foreground_thread != current_thread) {
+            if (win32.AttachThreadInput(current_thread, foreground_thread, 1) != 0) {
+                attached_thread = foreground_thread;
+            }
+        }
+    }
+    defer {
+        if (attached_thread != 0) {
+            _ = win32.AttachThreadInput(current_thread, attached_thread, 0);
+        }
+    }
+
+    _ = win32.BringWindowToTop(hwnd);
+    _ = win32.SetForegroundWindow(hwnd);
+    _ = win32.SetActiveWindow(hwnd);
+    _ = win32.SetFocus(hwnd);
+}
+
+fn activateWindow(target: win32.HWND) void {
+    const current_thread = win32.GetCurrentThreadId();
+    var target_pid: win32.DWORD = 0;
+    const target_thread = win32.GetWindowThreadProcessId(target, &target_pid);
+    var foreground_thread: win32.DWORD = 0;
+
+    if (win32.GetForegroundWindow()) |foreground| {
+        var foreground_pid: win32.DWORD = 0;
+        foreground_thread = win32.GetWindowThreadProcessId(foreground, &foreground_pid);
+    }
+
+    var attached_target = false;
+    var attached_foreground = false;
+    if (target_thread != 0 and target_thread != current_thread) {
+        attached_target = win32.AttachThreadInput(current_thread, target_thread, 1) != 0;
+    }
+    if (foreground_thread != 0 and foreground_thread != current_thread and foreground_thread != target_thread) {
+        attached_foreground = win32.AttachThreadInput(current_thread, foreground_thread, 1) != 0;
+    }
+    defer {
+        if (attached_foreground) {
+            _ = win32.AttachThreadInput(current_thread, foreground_thread, 0);
+        }
+        if (attached_target) {
+            _ = win32.AttachThreadInput(current_thread, target_thread, 0);
+        }
+    }
+
+    if (win32.IsIconic(target) != 0) {
+        _ = win32.ShowWindow(target, win32.SW_RESTORE);
+    } else {
+        _ = win32.ShowWindow(target, win32.SW_SHOW);
+    }
+    _ = win32.BringWindowToTop(target);
+    _ = win32.SetForegroundWindow(target);
+    _ = win32.SetActiveWindow(target);
 }
 
 pub fn toggle() void {
@@ -126,9 +301,7 @@ fn toggleWithMode(mode: Mode) void {
         current_mode = mode;
         refreshCurrentMode();
 
-        _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
-        _ = win32.SetForegroundWindow(hwnd);
-        _ = win32.SetFocus(hwnd);
+        focusOverlay(hwnd);
         visible = true;
         _ = win32.InvalidateRect(hwnd, null, 0);
     }
@@ -180,19 +353,25 @@ pub fn altTabNext() void {
 }
 
 pub fn altTabToSearch() void {
-    if (visible and alttab_mode) {
-        // Switch from Alt+Tab mode to search mode
+    const hwnd = overlay_hwnd orelse return;
+    if (!visible) return;
+
+    if (alttab_mode) {
+        // Switch from Alt+Tab cycling to normal search input.
         alttab_mode = false;
-        // Release Alt so typing works
+        // Release Alt so typing works. Do not swallow the real Alt-up event;
+        // Windows needs to see it or the modifier can get logically stuck.
         win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
-        // Reset search and selection
         search_len = 0;
         @memset(&search_buf, 0);
         selected = 0;
         refilter();
-        const hwnd = overlay_hwnd orelse return;
-        _ = win32.InvalidateRect(hwnd, null, 0);
     }
+
+    // Alt+Tab is driven from a global hook, so the previous foreground app can
+    // still own keyboard focus. Explicitly claim focus now.
+    focusOverlay(hwnd);
+    _ = win32.InvalidateRect(hwnd, null, 0);
 }
 
 pub fn altTabActivate() void {
@@ -202,11 +381,11 @@ pub fn altTabActivate() void {
             const idx = filtered_indices[selected];
             const target = windows[idx].hwnd;
             hide();
+            activateWindow(target);
+            // The real Alt-up is consumed by the hook to avoid menu-bar focus.
+            // Send a synthetic Alt-up only after the target is foreground so the
+            // previous window does not steal focus back.
             win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
-            if (win32.IsIconic(target) != 0) {
-                _ = win32.ShowWindow(target, win32.SW_RESTORE);
-            }
-            _ = win32.SetForegroundWindow(target);
         } else {
             hide();
         }
@@ -214,9 +393,7 @@ pub fn altTabActivate() void {
 }
 
 fn showOverlay(hwnd: win32.HWND) void {
-    _ = win32.ShowWindow(hwnd, win32.SW_SHOW);
-    _ = win32.SetForegroundWindow(hwnd);
-    _ = win32.SetFocus(hwnd);
+    focusOverlay(hwnd);
     visible = true;
     _ = win32.InvalidateRect(hwnd, null, 0);
 }
@@ -264,7 +441,7 @@ fn getSearchQuery() []const u16 {
     // Strip "b:" or "s:" prefix from search query
     if (search_len >= 2 and search_buf[1] == ':' and
         (search_buf[0] == 'b' or search_buf[0] == 'B' or
-        search_buf[0] == 's' or search_buf[0] == 'S'))
+            search_buf[0] == 's' or search_buf[0] == 'S'))
     {
         return search_buf[2..search_len];
     }
@@ -326,6 +503,12 @@ fn refilter() void {
         selected = 0;
     }
     scroll_offset = 0;
+
+    if (visible) {
+        if (overlay_hwnd) |hwnd| {
+            updateOverlayLayout(hwnd);
+        }
+    }
 }
 
 fn matchesSearchU8(haystack: []const u8, query: []const u16) bool {
@@ -383,11 +566,8 @@ fn activateSelected() void {
     switch (getEffectiveMode()) {
         .switcher => {
             const target_hwnd = windows[idx].hwnd;
-            if (win32.IsIconic(target_hwnd) != 0) {
-                _ = win32.ShowWindow(target_hwnd, win32.SW_RESTORE);
-            }
-            _ = win32.SetForegroundWindow(target_hwnd);
             hide();
+            activateWindow(target_hwnd);
         },
         .launcher => {
             const items = launcher.getItems();
@@ -439,13 +619,13 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
 
 fn handleClick(hwnd: win32.HWND, lParam: win32.LPARAM) void {
     const mouse_y: i32 = @intCast((lParam >> 16) & 0xFFFF);
-    const list_top: i32 = 2 + SEARCH_HEIGHT + PADDING;
 
-    if (mouse_y < list_top) return; // Clicked in search area
+    if (mouse_y < LIST_TOP) return; // Clicked in search area
 
-    const row_offset = @divTrunc(mouse_y - list_top, ROW_HEIGHT);
+    const row_offset = @divTrunc(mouse_y - LIST_TOP, ROW_HEIGHT);
+    if (row_offset < 0 or row_offset >= visibleRowCount()) return;
+
     const clicked_idx = scroll_offset + @as(usize, @intCast(row_offset));
-
     if (clicked_idx < filtered_count) {
         selected = clicked_idx;
         _ = win32.InvalidateRect(hwnd, null, 0);
@@ -503,6 +683,7 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
                 // Space in Alt+Tab mode → switch to search mode
                 alttab_mode = false;
                 tray.cancelAltTab(); // Tell hook Alt release shouldn't activate
+                focusOverlay(hwnd);
                 win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
                 search_len = 0;
                 @memset(&search_buf, 0);
@@ -556,8 +737,10 @@ fn paint(hwnd: win32.HWND) void {
     const hdc_screen = win32.BeginPaint(hwnd, &ps) orelse return;
     defer _ = win32.EndPaint(hwnd, &ps);
 
-    const width = ps.rcPaint.right - ps.rcPaint.left;
-    const height = ps.rcPaint.bottom - ps.rcPaint.top;
+    var client: win32.RECT = .{};
+    if (win32.GetClientRect(hwnd, &client) == 0) return;
+    const width = client.right - client.left;
+    const height = client.bottom - client.top;
     if (width <= 0 or height <= 0) return;
 
     const mem_dc = win32.CreateCompatibleDC(hdc_screen) orelse return;
@@ -565,9 +748,12 @@ fn paint(hwnd: win32.HWND) void {
         _ = win32.DeleteDC(mem_dc);
         return;
     };
-    _ = win32.SelectObject(mem_dc, @ptrCast(bmp));
+    const old_bmp = win32.SelectObject(mem_dc, @ptrCast(bmp));
     defer {
         _ = win32.BitBlt(hdc_screen, 0, 0, width, height, mem_dc, 0, 0, win32.SRCCOPY);
+        if (old_bmp) |old| {
+            _ = win32.SelectObject(mem_dc, @ptrCast(old));
+        }
         _ = win32.DeleteObject(@ptrCast(bmp));
         _ = win32.DeleteDC(mem_dc);
     }
@@ -575,199 +761,212 @@ fn paint(hwnd: win32.HWND) void {
     if (font) |f| _ = win32.SelectObject(mem_dc, @ptrCast(f));
     _ = win32.SetBkMode(mem_dc, win32.TRANSPARENT);
 
-    // Background
-    const bg_brush = win32.CreateSolidBrush(BG_COLOR) orelse return;
-    defer _ = win32.DeleteObject(@ptrCast(bg_brush));
-    var full_rect = win32.RECT{ .left = 0, .top = 0, .right = width, .bottom = height };
-    _ = win32.FillRect(mem_dc, &full_rect, bg_brush);
+    fillRect(mem_dc, 0, 0, width, height, BG_COLOR);
 
-    // Mode accent top border (2px colored line)
-    const mode_idx = @intFromEnum(getEffectiveMode());
-    const accent_brush = win32.CreateSolidBrush(MODE_ACCENT[mode_idx]) orelse return;
-    defer _ = win32.DeleteObject(@ptrCast(accent_brush));
-    var accent_rect = win32.RECT{ .left = 0, .top = 0, .right = width, .bottom = 2 };
-    _ = win32.FillRect(mem_dc, &accent_rect, accent_brush);
+    // Rounded search/input surface.
+    const search_top = PADDING;
+    const search_bottom = search_top + SEARCH_HEIGHT;
+    drawRoundedRect(mem_dc, PADDING, search_top, width - PADDING, search_bottom, SEARCH_RADIUS, SURFACE_BORDER);
+    drawRoundedRect(mem_dc, PADDING + 1, search_top + 1, width - PADDING - 1, search_bottom - 1, SEARCH_RADIUS - 1, SURFACE_COLOR);
 
-    const border_brush = win32.CreateSolidBrush(BORDER_COLOR) orelse return;
-    defer _ = win32.DeleteObject(@ptrCast(border_brush));
-
-    // Search box (starts right after accent border)
-    const search_y: i32 = 2;
-    const search_brush = win32.CreateSolidBrush(SEARCH_BG) orelse return;
-    defer _ = win32.DeleteObject(@ptrCast(search_brush));
-    var search_rect = win32.RECT{
-        .left = PADDING,
-        .top = search_y + 2,
-        .right = width - PADDING,
-        .bottom = search_y + SEARCH_HEIGHT,
+    const count_width: i32 = 52;
+    const search_text_rect = win32.RECT{
+        .left = PADDING + 12,
+        .top = search_top,
+        .right = width - PADDING - count_width - 8,
+        .bottom = search_bottom,
     };
-    _ = win32.FillRect(mem_dc, &search_rect, search_brush);
-
-    // Search text
-    _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
     if (search_len > 0) {
-        _ = win32.TextOutW(mem_dc, PADDING + 4, search_y + 6, &search_buf, @intCast(search_len));
+        drawTextLine(mem_dc, search_text_rect, &search_buf, search_len, TEXT_COLOR, win32.DT_LEFT);
     } else {
-        _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-        const placeholder = comptime toWide("Search... (b: bookmarks, s: start menu)");
-        const ph_len: i32 = 40;
-        _ = win32.TextOutW(mem_dc, PADDING + 4, search_y + 6, placeholder, ph_len);
+        const placeholder = comptime toWide("Search windows, apps, bookmarks...");
+        drawTextLine(mem_dc, search_text_rect, placeholder, ("Search windows, apps, bookmarks...").len, DIM_COLOR, win32.DT_LEFT);
     }
 
-    // Right-side indicator
-    {
-        _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-        var label_buf: [64]u16 = [_]u16{0} ** 64;
-        var label_len: usize = 0;
-
-        if (current_mode == .switcher and cluster_index > 0) {
-            const c = &clusters[cluster_index - 1];
-            const name_len = @min(c.exe_name_len, 40);
-            @memcpy(label_buf[0..name_len], c.exe_name[0..name_len]);
-            label_len = name_len;
-        }
-        // Add count
-        if (label_len > 0) {
-            label_buf[label_len] = ' ';
-            label_len += 1;
-        }
-        label_buf[label_len] = '(';
-        label_len += 1;
-        label_len += formatNum(filtered_count, label_buf[label_len..]);
-        label_buf[label_len] = ')';
-        label_len += 1;
-
-        const label_x = width - PADDING - @as(i32, @intCast(label_len)) * 8;
-        _ = win32.TextOutW(mem_dc, label_x, search_y + 6, &label_buf, @intCast(label_len));
-    }
-
-    // Separator
-    var sep_rect = win32.RECT{
-        .left = 0,
-        .top = search_y + SEARCH_HEIGHT + 2,
-        .right = width,
-        .bottom = search_y + SEARCH_HEIGHT + 3,
+    var count_buf: [64]u16 = [_]u16{0} ** 64;
+    const count_len = formatCountLabel(&count_buf);
+    const count_rect = win32.RECT{
+        .left = width - PADDING - count_width,
+        .top = search_top,
+        .right = width - PADDING - 12,
+        .bottom = search_bottom,
     };
-    _ = win32.FillRect(mem_dc, &sep_rect, border_brush);
+    drawTextLine(mem_dc, count_rect, &count_buf, count_len, SUBTLE_COLOR, win32.DT_RIGHT);
 
-    // Item list
-    const list_top = search_y + SEARCH_HEIGHT + PADDING;
-    const max_rows = cfg.max_visible_rows;
+    const mode_idx = @intFromEnum(getEffectiveMode());
+    const rows_to_paint = visibleRowCount();
 
     if (filtered_count == 0) {
-        _ = win32.SetTextColor(mem_dc, DIM_COLOR);
         const eff = getEffectiveMode();
         const no_match = switch (eff) {
             .switcher => comptime toWide("No matching windows"),
             .launcher => comptime toWide("No matching programs"),
             .bookmarks_ => comptime toWide("No matching bookmarks"),
         };
-        const nm_len: i32 = switch (eff) {
+        const nm_len: usize = switch (eff) {
             .switcher => 19,
             .launcher => 20,
             .bookmarks_ => 21,
         };
-        _ = win32.TextOutW(mem_dc, @divTrunc(width, 2) - 80, list_top + 20, no_match, nm_len);
+        const empty_rect = win32.RECT{
+            .left = PADDING + 14,
+            .top = LIST_TOP,
+            .right = width - PADDING - 14,
+            .bottom = LIST_TOP + ROW_HEIGHT,
+        };
+        drawTextLine(mem_dc, empty_rect, no_match, nm_len, DIM_COLOR, win32.DT_LEFT);
     } else {
-        const sel_brush = win32.CreateSolidBrush(MODE_COLORS[mode_idx]) orelse return;
-        defer _ = win32.DeleteObject(@ptrCast(sel_brush));
-
-        const end = @min(scroll_offset + max_rows, filtered_count);
+        const end = @min(scroll_offset + @as(usize, @intCast(rows_to_paint)), filtered_count);
         for (scroll_offset..end) |vi| {
             const row: i32 = @intCast(vi - scroll_offset);
-            const y = list_top + row * ROW_HEIGHT;
+            const y = LIST_TOP + row * ROW_HEIGHT;
             const data_idx = filtered_indices[vi];
 
-            // Selection highlight
             if (vi == selected) {
-                var sel_rect = win32.RECT{
-                    .left = 1,
-                    .top = y,
-                    .right = width - 1,
-                    .bottom = y + ROW_HEIGHT,
-                };
-                _ = win32.FillRect(mem_dc, &sel_rect, sel_brush);
+                drawRoundedRect(mem_dc, PADDING, y + 2, width - PADDING, y + ROW_HEIGHT - 2, ROW_RADIUS, SELECTION_COLOR);
+                drawRoundedRect(mem_dc, PADDING + 5, y + 9, PADDING + 8, y + ROW_HEIGHT - 9, 2, MODE_ACCENT[mode_idx]);
             }
 
-            const text_y = y + (ROW_HEIGHT - 16) / 2;
-
             switch (getEffectiveMode()) {
-                .switcher => paintWindowRow(mem_dc, data_idx, text_y, width),
-                .launcher => paintLauncherRow(mem_dc, data_idx, text_y, width),
-                .bookmarks_ => paintBookmarkRow(mem_dc, data_idx, text_y, width),
+                .switcher => paintWindowRow(mem_dc, data_idx, y, width),
+                .launcher => paintLauncherRow(mem_dc, data_idx, y, width),
+                .bookmarks_ => paintBookmarkRow(mem_dc, data_idx, y, width),
             }
         }
     }
+
+    if (version_font) |vf| {
+        _ = win32.SelectObject(mem_dc, @ptrCast(vf));
+    }
+    const version_label = comptime toWide("v" ++ ver.version);
+    const version_len: usize = ("v" ++ ver.version).len;
+    const version_rect = win32.RECT{
+        .left = PADDING,
+        .top = height - VERSION_FOOTER_HEIGHT,
+        .right = width - PADDING,
+        .bottom = height - 4,
+    };
+    drawTextLine(mem_dc, version_rect, version_label, version_len, SUBTLE_COLOR, win32.DT_RIGHT);
+
+    if (font) |f| {
+        _ = win32.SelectObject(mem_dc, @ptrCast(f));
+    }
 }
 
-fn paintWindowRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG) void {
+fn fillRect(mem_dc: win32.HDC, left: i32, top: i32, right: i32, bottom: i32, color: win32.COLORREF) void {
+    if (right <= left or bottom <= top) return;
+    const brush = win32.CreateSolidBrush(color) orelse return;
+    defer _ = win32.DeleteObject(@ptrCast(brush));
+    var rect = win32.RECT{ .left = left, .top = top, .right = right, .bottom = bottom };
+    _ = win32.FillRect(mem_dc, &rect, brush);
+}
+
+fn drawRoundedRect(mem_dc: win32.HDC, left: i32, top: i32, right: i32, bottom: i32, radius: i32, color: win32.COLORREF) void {
+    if (right <= left or bottom <= top) return;
+    const brush = win32.CreateSolidBrush(color) orelse return;
+    defer _ = win32.DeleteObject(@ptrCast(brush));
+
+    const diameter = @max(1, radius * 2);
+    const region = win32.CreateRoundRectRgn(left, top, right, bottom, diameter, diameter) orelse return;
+    defer _ = win32.DeleteObject(@ptrCast(region));
+
+    _ = win32.FillRgn(mem_dc, region, brush);
+}
+
+fn drawTextLine(mem_dc: win32.HDC, rect: win32.RECT, text: [*]const u16, len: usize, color: win32.COLORREF, text_align: win32.UINT) void {
+    if (len == 0) return;
+    var r = rect;
+    _ = win32.SetTextColor(mem_dc, color);
+    _ = win32.DrawTextW(
+        mem_dc,
+        text,
+        @intCast(len),
+        &r,
+        text_align | win32.DT_SINGLELINE | win32.DT_VCENTER | win32.DT_NOPREFIX | win32.DT_END_ELLIPSIS,
+    );
+}
+
+fn formatCountLabel(buf: *[64]u16) usize {
+    var len: usize = 0;
+    if (current_mode == .switcher and cluster_index > 0) {
+        const c = &clusters[cluster_index - 1];
+        const name_len = @min(c.exe_name_len, 32);
+        @memcpy(buf[0..name_len], c.exe_name[0..name_len]);
+        len = name_len;
+        buf[len] = ' ';
+        len += 1;
+    }
+    len += formatNum(filtered_count, buf[len..]);
+    return len;
+}
+
+fn paintWindowRow(mem_dc: win32.HDC, idx: usize, row_y: i32, width: win32.LONG) void {
     const w = &windows[idx];
-    const max_chars: usize = @intCast(@divTrunc(width - PADDING * 2 - ICON_SIZE - 6, 8));
+    const icon_x = PADDING + 14;
+    const icon_y = row_y + @divTrunc(ROW_HEIGHT - ICON_SIZE, 2);
 
     if (w.icon) |icon| {
-        _ = win32.DrawIconEx(mem_dc, PADDING, text_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
+        _ = win32.DrawIconEx(mem_dc, icon_x, icon_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
     }
 
-    const text_x = PADDING + ICON_SIZE + 6;
-    _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-    const exe_show = @min(w.exe_name_len, max_chars);
-    if (exe_show > 0) {
-        _ = win32.TextOutW(mem_dc, text_x, text_y, &w.exe_name, @intCast(exe_show));
-    }
+    const text_x = icon_x + ICON_SIZE + 12;
+    const meta_width: i32 = 112;
+    const title_rect = win32.RECT{
+        .left = text_x,
+        .top = row_y,
+        .right = width - PADDING - meta_width - 12,
+        .bottom = row_y + ROW_HEIGHT,
+    };
+    const app_rect = win32.RECT{
+        .left = width - PADDING - meta_width,
+        .top = row_y,
+        .right = width - PADDING - 12,
+        .bottom = row_y + ROW_HEIGHT,
+    };
 
-    const used = exe_show + 3; // exe + separator
-    if (used >= max_chars) return;
-
-    const sep = comptime toWide(" - ");
-    const sep_x = text_x + @as(i32, @intCast(exe_show)) * 8;
-    _ = win32.TextOutW(mem_dc, sep_x, text_y, sep, 3);
-
-    const title_x = sep_x + 3 * 8;
-    const title_max = max_chars - used;
-    const title_show = @min(w.title_len, title_max);
-    _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
-    if (title_show > 0) {
-        _ = win32.TextOutW(mem_dc, title_x, text_y, &w.title, @intCast(title_show));
-    }
+    drawTextLine(mem_dc, title_rect, &w.title, w.title_len, TEXT_COLOR, win32.DT_LEFT);
+    drawTextLine(mem_dc, app_rect, &w.exe_name, w.exe_name_len, DIM_COLOR, win32.DT_RIGHT);
 }
 
-fn paintLauncherRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG) void {
+fn paintLauncherRow(mem_dc: win32.HDC, idx: usize, row_y: i32, width: win32.LONG) void {
     const items = launcher.getItems();
     const item = &items[idx];
-    const max_chars: usize = @intCast(@divTrunc(width - PADDING * 2 - ICON_SIZE - 6, 8));
+    const icon_x = PADDING + 14;
+    const icon_y = row_y + @divTrunc(ROW_HEIGHT - ICON_SIZE, 2);
 
     if (item.icon) |icon| {
-        _ = win32.DrawIconEx(mem_dc, PADDING, text_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
+        _ = win32.DrawIconEx(mem_dc, icon_x, icon_y, icon, ICON_SIZE, ICON_SIZE, 0, null, win32.DI_NORMAL);
     }
 
-    const text_x = PADDING + ICON_SIZE + 6;
-    _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
-    const show_len = @min(item.name_len, max_chars);
-    if (show_len > 0) {
-        _ = win32.TextOutW(mem_dc, text_x, text_y, &item.name, @intCast(show_len));
-    }
+    const name_rect = win32.RECT{
+        .left = icon_x + ICON_SIZE + 12,
+        .top = row_y,
+        .right = width - PADDING - 12,
+        .bottom = row_y + ROW_HEIGHT,
+    };
+    drawTextLine(mem_dc, name_rect, &item.name, item.name_len, TEXT_COLOR, win32.DT_LEFT);
 }
 
-fn paintBookmarkRow(mem_dc: win32.HDC, idx: usize, text_y: i32, width: win32.LONG) void {
+fn paintBookmarkRow(mem_dc: win32.HDC, idx: usize, row_y: i32, width: win32.LONG) void {
     const items = bookmarks.getItems();
     const bm = &items[idx];
 
-    const text_x = PADDING + 4;
+    const url_width: i32 = 220;
+    const name_rect = win32.RECT{
+        .left = PADDING + 14,
+        .top = row_y,
+        .right = width - PADDING - url_width - 12,
+        .bottom = row_y + ROW_HEIGHT,
+    };
+    const url_rect = win32.RECT{
+        .left = width - PADDING - url_width,
+        .top = row_y,
+        .right = width - PADDING - 12,
+        .bottom = row_y + ROW_HEIGHT,
+    };
 
-    // Bookmark name
-    _ = win32.SetTextColor(mem_dc, TEXT_COLOR);
-    if (bm.name_len > 0) {
-        _ = win32.TextOutW(mem_dc, text_x, text_y, &bm.name, @intCast(bm.name_len));
-    }
-
-    // URL (dimmed, right side)
-    _ = win32.SetTextColor(mem_dc, DIM_COLOR);
-    if (bm.url_w_len > 0) {
-        const max_url_chars: usize = @intCast(@divTrunc(width - 200, 8));
-        const show_len = @min(bm.url_w_len, max_url_chars);
-        const url_x = width - PADDING - @as(i32, @intCast(show_len)) * 8;
-        _ = win32.TextOutW(mem_dc, url_x, text_y, &bm.url_w, @intCast(show_len));
-    }
+    drawTextLine(mem_dc, name_rect, &bm.name, bm.name_len, TEXT_COLOR, win32.DT_LEFT);
+    drawTextLine(mem_dc, url_rect, &bm.url_w, bm.url_w_len, DIM_COLOR, win32.DT_RIGHT);
 }
 
 fn formatNum(n: usize, buf: []u16) usize {

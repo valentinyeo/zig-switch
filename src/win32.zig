@@ -11,6 +11,7 @@ pub const HBITMAP = *opaque {};
 pub const HGDIOBJ = *opaque {};
 pub const HMENU = *opaque {};
 pub const HCURSOR = *opaque {};
+pub const HRGN = *opaque {};
 pub const WPARAM = usize;
 pub const LPARAM = isize;
 pub const LRESULT = isize;
@@ -32,6 +33,11 @@ pub const RECT = extern struct {
 pub const POINT = extern struct {
     x: LONG = 0,
     y: LONG = 0,
+};
+
+pub const FILETIME = extern struct {
+    dwLowDateTime: DWORD = 0,
+    dwHighDateTime: DWORD = 0,
 };
 
 pub const MSG = extern struct {
@@ -110,6 +116,7 @@ pub const WM_CHAR: UINT = 0x0102;
 pub const WM_HOTKEY: UINT = 0x0312;
 pub const WM_SYSKEYDOWN_MSG: UINT = 0x0104;
 pub const WM_GETICON: UINT = 0x007F;
+pub const WM_LBUTTONDOWN: UINT = 0x0201;
 
 pub const WA_INACTIVE: WPARAM = 0;
 
@@ -131,11 +138,15 @@ pub const SW_SHOW: i32 = 5;
 pub const SW_HIDE: i32 = 0;
 pub const SW_RESTORE: i32 = 9;
 
+pub const SWP_NOZORDER: UINT = 0x0004;
+pub const SWP_NOACTIVATE: UINT = 0x0010;
+
 pub const SM_CXSCREEN: i32 = 0;
 pub const SM_CYSCREEN: i32 = 1;
 
 pub const CS_HREDRAW: UINT = 0x0002;
 pub const CS_VREDRAW: UINT = 0x0001;
+pub const CS_DROPSHADOW: UINT = 0x00020000;
 
 pub const MB_OK: UINT = 0x00000000;
 pub const MB_ICONERROR: UINT = 0x00000010;
@@ -156,6 +167,13 @@ pub const PROCESS_QUERY_LIMITED_INFORMATION: DWORD = 0x1000;
 pub const IDI_APPLICATION: usize = 32512;
 
 pub const DI_NORMAL: UINT = 0x0003;
+
+pub const DT_LEFT: UINT = 0x00000000;
+pub const DT_RIGHT: UINT = 0x00000002;
+pub const DT_VCENTER: UINT = 0x00000004;
+pub const DT_SINGLELINE: UINT = 0x00000020;
+pub const DT_NOPREFIX: UINT = 0x00000800;
+pub const DT_END_ELLIPSIS: UINT = 0x00008000;
 
 pub const SRCCOPY: DWORD = 0x00CC0020;
 
@@ -187,7 +205,13 @@ pub extern "user32" fn DefWindowProcW(hWnd: HWND, msg: UINT, wParam: WPARAM, lPa
 pub extern "user32" fn RegisterClassExW(lpWndClass: *const WNDCLASSEXW) callconv(.winapi) ATOM;
 pub extern "user32" fn CreateWindowExW(dwExStyle: DWORD, lpClassName: [*:0]const u16, lpWindowName: [*:0]const u16, dwStyle: DWORD, x: i32, y: i32, nWidth: i32, nHeight: i32, hWndParent: ?HWND, hMenu: ?HMENU, hInstance: ?HINSTANCE, lpParam: ?*anyopaque) callconv(.winapi) ?HWND;
 pub extern "user32" fn ShowWindow(hWnd: HWND, nCmdShow: i32) callconv(.winapi) BOOL;
+pub extern "user32" fn SetWindowPos(hWnd: HWND, hWndInsertAfter: ?HWND, X: i32, Y: i32, cx: i32, cy: i32, uFlags: UINT) callconv(.winapi) BOOL;
 pub extern "user32" fn SetForegroundWindow(hWnd: HWND) callconv(.winapi) BOOL;
+pub extern "user32" fn GetForegroundWindow() callconv(.winapi) ?HWND;
+pub extern "user32" fn SetActiveWindow(hWnd: HWND) callconv(.winapi) ?HWND;
+pub extern "user32" fn BringWindowToTop(hWnd: HWND) callconv(.winapi) BOOL;
+pub extern "user32" fn AttachThreadInput(idAttach: DWORD, idAttachTo: DWORD, fAttach: BOOL) callconv(.winapi) BOOL;
+pub extern "user32" fn GetClientRect(hWnd: HWND, lpRect: *RECT) callconv(.winapi) BOOL;
 pub extern "user32" fn GetSystemMetrics(nIndex: i32) callconv(.winapi) i32;
 pub extern "user32" fn InvalidateRect(hWnd: ?HWND, lpRect: ?*const RECT, bErase: BOOL) callconv(.winapi) BOOL;
 pub extern "user32" fn BeginPaint(hWnd: HWND, lpPaint: *PAINTSTRUCT) callconv(.winapi) ?HDC;
@@ -196,6 +220,7 @@ pub extern "user32" fn FillRect(hDC: HDC, lprc: *const RECT, hbr: HBRUSH) callco
 pub extern "user32" fn GetDC(hWnd: ?HWND) callconv(.winapi) ?HDC;
 pub extern "user32" fn ReleaseDC(hWnd: ?HWND, hDC: HDC) callconv(.winapi) i32;
 pub extern "user32" fn DrawIconEx(hdc: HDC, xLeft: i32, yTop: i32, hIcon: HICON, cxWidth: i32, cyWidth: i32, istepIfAniCur: UINT, hbrFlickerFreeDraw: ?HBRUSH, diFlags: UINT) callconv(.winapi) BOOL;
+pub extern "user32" fn DrawTextW(hdc: HDC, lpchText: [*]const u16, cchText: i32, lprc: *RECT, format: UINT) callconv(.winapi) i32;
 pub extern "user32" fn LoadIconW(hInstance: ?HINSTANCE, lpIconName: usize) callconv(.winapi) ?HICON;
 pub extern "user32" fn DestroyIcon(hIcon: HICON) callconv(.winapi) BOOL;
 pub extern "user32" fn EnumWindows(lpEnumFunc: *const fn (HWND, LPARAM) callconv(.winapi) BOOL, lParam: LPARAM) callconv(.winapi) BOOL;
@@ -209,6 +234,7 @@ pub extern "user32" fn GetClassLongPtrW(hWnd: HWND, nIndex: i32) callconv(.winap
 pub extern "user32" fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *DWORD) callconv(.winapi) DWORD;
 pub extern "user32" fn SendMessageTimeoutW(hWnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM, fuFlags: UINT, uTimeout: UINT, lpdwResult: ?*usize) callconv(.winapi) usize;
 pub extern "user32" fn SetLayeredWindowAttributes(hWnd: HWND, crKey: COLORREF, bAlpha: u8, dwFlags: DWORD) callconv(.winapi) BOOL;
+pub extern "user32" fn SetWindowRgn(hWnd: HWND, hRgn: ?HRGN, bRedraw: BOOL) callconv(.winapi) i32;
 pub extern "user32" fn LoadCursorW(hInstance: ?HINSTANCE, lpCursorName: usize) callconv(.winapi) ?HCURSOR;
 pub extern "user32" fn SetTimer(hWnd: ?HWND, nIDEvent: usize, uElapse: UINT, lpTimerFunc: ?*anyopaque) callconv(.winapi) usize;
 pub extern "user32" fn KillTimer(hWnd: ?HWND, uIDEvent: usize) callconv(.winapi) BOOL;
@@ -238,11 +264,19 @@ pub extern "gdi32" fn BitBlt(hdc: HDC, x: i32, y: i32, cx: i32, cy: i32, hdcSrc:
 pub extern "gdi32" fn DeleteDC(hdc: HDC) callconv(.winapi) BOOL;
 pub extern "gdi32" fn DeleteObject(ho: *anyopaque) callconv(.winapi) BOOL;
 pub extern "gdi32" fn CreateSolidBrush(color: COLORREF) callconv(.winapi) ?HBRUSH;
+pub extern "gdi32" fn CreateRoundRectRgn(nLeftRect: i32, nTopRect: i32, nRightRect: i32, nBottomRect: i32, nWidthEllipse: i32, nHeightEllipse: i32) callconv(.winapi) ?HRGN;
 pub extern "gdi32" fn CreateFontW(cHeight: i32, cWidth: i32, cEscapement: i32, cOrientation: i32, cWeight: i32, bItalic: DWORD, bUnderline: DWORD, bStrikeOut: DWORD, iCharSet: DWORD, iOutPrecision: DWORD, iClipPrecision: DWORD, iQuality: DWORD, iPitchAndFamily: DWORD, pszFaceName: [*:0]const u16) callconv(.winapi) ?HFONT;
+pub extern "gdi32" fn FillRgn(hdc: HDC, hrgn: HRGN, hbr: HBRUSH) callconv(.winapi) BOOL;
 pub extern "gdi32" fn TextOutW(hdc: HDC, x: i32, y: i32, lpString: [*]const u16, c: i32) callconv(.winapi) BOOL;
 pub extern "gdi32" fn SetTextColor(hdc: HDC, color: COLORREF) callconv(.winapi) COLORREF;
 pub extern "gdi32" fn SetBkMode(hdc: HDC, mode: i32) callconv(.winapi) i32;
 pub extern "gdi32" fn GetTextMetricsW(hdc: HDC, lptm: *TEXTMETRICW) callconv(.winapi) BOOL;
+
+// DWM functions
+pub extern "dwmapi" fn DwmSetWindowAttribute(hwnd: HWND, dwAttribute: DWORD, pvAttribute: *const anyopaque, cbAttribute: DWORD) callconv(.winapi) i32;
+
+pub const DWMWA_WINDOW_CORNER_PREFERENCE: DWORD = 33;
+pub const DWMWCP_ROUND: DWORD = 2;
 
 // Kernel32 functions
 pub extern "kernel32" fn GetModuleHandleW(lpModuleName: ?[*:0]const u16) callconv(.winapi) ?HINSTANCE;
@@ -250,6 +284,15 @@ pub extern "kernel32" fn OpenProcess(dwDesiredAccess: DWORD, bInheritHandle: BOO
 pub extern "kernel32" fn CloseHandle(hObject: HANDLE) callconv(.winapi) BOOL;
 pub extern "kernel32" fn QueryFullProcessImageNameW(hProcess: HANDLE, dwFlags: DWORD, lpExeName: [*]u16, lpdwSize: *DWORD) callconv(.winapi) BOOL;
 pub extern "kernel32" fn GetModuleFileNameW(hModule: ?HINSTANCE, lpFilename: [*]u16, nSize: DWORD) callconv(.winapi) DWORD;
+pub extern "kernel32" fn CreateFileW(lpFileName: [*:0]const u16, dwDesiredAccess: DWORD, dwShareMode: DWORD, lpSecurityAttributes: ?*anyopaque, dwCreationDisposition: DWORD, dwFlagsAndAttributes: DWORD, hTemplateFile: ?HANDLE) callconv(.winapi) HANDLE;
+pub extern "kernel32" fn ReadFile(hFile: HANDLE, lpBuffer: [*]u8, nNumberOfBytesToRead: DWORD, lpNumberOfBytesRead: *DWORD, lpOverlapped: ?*anyopaque) callconv(.winapi) BOOL;
+
+pub const GENERIC_READ: DWORD = 0x80000000;
+pub const FILE_SHARE_READ: DWORD = 0x00000001;
+pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
+pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
+pub const OPEN_EXISTING: DWORD = 3;
+pub const FILE_ATTRIBUTE_NORMAL: DWORD = 0x00000080;
 
 // Shell32 functions
 pub extern "shell32" fn ExtractIconExW(lpszFile: [*:0]const u16, nIconIndex: i32, phiconLarge: ?*?HICON, phiconSmall: ?*?HICON, nIcons: UINT) callconv(.winapi) UINT;
@@ -270,9 +313,9 @@ pub const SHGFI_SMALLICON: UINT = 0x000000001;
 // Kernel32 file search
 pub const WIN32_FIND_DATAW = extern struct {
     dwFileAttributes: DWORD = 0,
-    ftCreationTime: u64 = 0,
-    ftLastAccessTime: u64 = 0,
-    ftLastWriteTime: u64 = 0,
+    ftCreationTime: FILETIME = .{},
+    ftLastAccessTime: FILETIME = .{},
+    ftLastWriteTime: FILETIME = .{},
     nFileSizeHigh: DWORD = 0,
     nFileSizeLow: DWORD = 0,
     dwReserved0: DWORD = 0,
@@ -325,54 +368,6 @@ pub const WM_APP_ALTTAB_NEXT: UINT = 0x8002; // Tab while Alt held: cycle next
 pub const WM_APP_ALTTAB_PREV: UINT = 0x8003; // Shift+Tab while Alt held: cycle prev
 pub const WM_APP_ALTTAB_SEARCH: UINT = 0x8004; // Space while Alt+Tab: switch to search
 pub const WM_APP_ALTTAB_ACTIVATE: UINT = 0x8005; // Alt released: activate selected
-
-// Tray icon
-pub const NOTIFYICONDATAW = extern struct {
-    cbSize: DWORD = @sizeOf(NOTIFYICONDATAW),
-    hWnd: ?HWND = null,
-    uID: UINT = 0,
-    uFlags: UINT = 0,
-    uCallbackMessage: UINT = 0,
-    hIcon: ?HICON = null,
-    szTip: [128]u16 = [_]u16{0} ** 128,
-    dwState: DWORD = 0,
-    dwStateMask: DWORD = 0,
-    szInfo: [256]u16 = [_]u16{0} ** 256,
-    uVersion: UINT = 0,
-    szInfoTitle: [64]u16 = [_]u16{0} ** 64,
-    dwInfoFlags: DWORD = 0,
-    guidItem: [16]u8 = [_]u8{0} ** 16,
-    hBalloonIcon: ?HICON = null,
-};
-
-pub const NIM_ADD: DWORD = 0x00000000;
-pub const NIM_MODIFY: DWORD = 0x00000001;
-pub const NIM_DELETE: DWORD = 0x00000002;
-pub const NIF_MESSAGE: UINT = 0x00000001;
-pub const NIF_ICON: UINT = 0x00000002;
-pub const NIF_TIP: UINT = 0x00000004;
-
-pub const WM_LBUTTONDOWN: UINT = 0x0201;
-pub const WM_APP_TRAY: UINT = 0x8010;
-pub const WM_RBUTTONUP: UINT = 0x0205;
-pub const WM_LBUTTONDBLCLK: UINT = 0x0203;
-pub const WM_COMMAND: UINT = 0x0111;
-
-pub extern "shell32" fn Shell_NotifyIconW(dwMessage: DWORD, lpData: *NOTIFYICONDATAW) callconv(.winapi) BOOL;
-
-// Menu
-pub extern "user32" fn CreatePopupMenu() callconv(.winapi) ?HMENU;
-pub extern "user32" fn AppendMenuW(hMenu: HMENU, uFlags: UINT, uIDNewItem: usize, lpNewItem: ?[*:0]const u16) callconv(.winapi) BOOL;
-pub extern "user32" fn TrackPopupMenu(hMenu: HMENU, uFlags: UINT, x: i32, y: i32, nReserved: i32, hWnd: HWND, prcRect: ?*const RECT) callconv(.winapi) BOOL;
-pub extern "user32" fn DestroyMenu(hMenu: HMENU) callconv(.winapi) BOOL;
-pub extern "user32" fn GetCursorPos(lpPoint: *POINT) callconv(.winapi) BOOL;
-
-pub const MF_STRING: UINT = 0x00000000;
-pub const MF_CHECKED: UINT = 0x00000008;
-pub const MF_GRAYED: UINT = 0x00000001;
-pub const MF_SEPARATOR: UINT = 0x00000800;
-pub const TPM_BOTTOMALIGN: UINT = 0x0020;
-pub const TPM_LEFTALIGN: UINT = 0x0000;
 
 // Input simulation
 pub extern "user32" fn keybd_event(bVk: u8, bScan: u8, dwFlags: DWORD, dwExtraInfo: usize) callconv(.winapi) void;

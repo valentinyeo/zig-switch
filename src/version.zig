@@ -1,2 +1,2 @@
-pub const version = "0.5.3";
-pub const summary = "Restore minimized windows when activating from switcher";
+pub const version = "0.5.16";
+pub const summary = "Fix resource cleanup and launcher scanning";

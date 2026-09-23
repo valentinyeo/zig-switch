@@ -8,9 +8,6 @@ pub fn main() void {
     // DPI awareness
     _ = win32.SetProcessDpiAwarenessContext(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    // Register to start with Windows
-    registerAutoStart();
-
     // Load config
     const cfg = config.loadConfig();
 
@@ -20,13 +17,15 @@ pub fn main() void {
         return;
     }
 
-
     // Create overlay window
     const hInstance = win32.GetModuleHandleW(null);
     ui.init(hInstance, cfg);
 
-    // Create system tray icon (Alt+Tab hook ON by default)
+    // Enable Alt+Tab hook (no tray icon; ZigSwitch runs quietly in the background)
     tray.init(hInstance);
+
+    // Register to start with Windows only after the required hotkey is available.
+    registerAutoStart();
 
     // Message loop
     var msg: win32.MSG = undefined;
@@ -53,6 +52,7 @@ pub fn main() void {
     }
 
     tray.deinit();
+    ui.deinit();
     _ = win32.UnregisterHotKey(null, 1);
 }
 

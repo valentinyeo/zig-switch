@@ -74,20 +74,23 @@ fn loadBookmarks() void {
     const path_len = win32.ExpandEnvironmentStringsW(@ptrCast(&src), &path_buf, 512);
     if (path_len == 0 or path_len > 512) return;
 
-    // Convert to u8 path for std.fs
-    var path_u8: [512]u8 = undefined;
-    const u8_len = path_len - 1; // exclude null
-    for (0..u8_len) |i| {
-        path_u8[i] = @intCast(path_buf[i] & 0xFF);
-    }
-
     // Read the file
-    const file = std.fs.openFileAbsolute(path_u8[0..u8_len], .{}) catch return;
-    defer file.close();
+    const file = win32.CreateFileW(
+        @ptrCast(&path_buf),
+        win32.GENERIC_READ,
+        win32.FILE_SHARE_READ | win32.FILE_SHARE_WRITE | win32.FILE_SHARE_DELETE,
+        null,
+        win32.OPEN_EXISTING,
+        win32.FILE_ATTRIBUTE_NORMAL,
+        null,
+    );
+    if (file == win32.INVALID_HANDLE_VALUE) return;
+    defer _ = win32.CloseHandle(file);
 
     // Read up to 2MB
     var buf: [2 * 1024 * 1024]u8 = undefined;
-    const bytes_read = file.readAll(&buf) catch return;
+    var bytes_read: win32.DWORD = 0;
+    if (win32.ReadFile(file, &buf, buf.len, &bytes_read, null) == 0) return;
     const content = buf[0..bytes_read];
 
     // Simple JSON parser: find all "name" + "url" pairs for type "url"
