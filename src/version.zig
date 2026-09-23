@@ -1,2 +1,2 @@
-pub const version = "0.5.16";
-pub const summary = "Fix resource cleanup and launcher scanning";
+pub const version = "0.6.0";
+pub const summary = "Drop WH_KEYBOARD_LL hook; RegisterHotKey Alt+Tab + ReleaseSmall build";

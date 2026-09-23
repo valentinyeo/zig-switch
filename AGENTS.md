@@ -4,8 +4,7 @@
 
 ZigSwitch is a small Windows desktop utility written in Zig with direct Win32 API calls. The entry point is `src/main.zig`; supporting modules live beside it in `src/`.
 
-- `src/ui.zig`: overlay rendering, keyboard input, mode and search state.
-- `src/tray.zig`: tray icon and Alt+Tab low-level keyboard hook.
+- `src/ui.zig`: overlay rendering, keyboard input, mode and search state, and the Ctrl+Alt-hold-to-cycle Alt+Tab replacement (see CLAUDE.md — no `WH_KEYBOARD_LL` on this machine, ever).
 - `src/window_enum.zig`, `src/search.zig`, `src/launcher.zig`, `src/bookmarks.zig`: window, program, and bookmark discovery/search behavior.
 - `src/win32.zig`: Win32 bindings and constants.
 - `src/version.zig`: version string and summary shown from the tray menu.
