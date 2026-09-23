@@ -5,7 +5,6 @@ const search = @import("search.zig");
 const config_mod = @import("config.zig");
 const launcher = @import("launcher.zig");
 const bookmarks = @import("bookmarks.zig");
-const tray = @import("tray.zig");
 const ver = @import("version.zig");
 
 // Modes
@@ -48,7 +47,18 @@ var overlay_hwnd: ?win32.HWND = null;
 var visible = false;
 var cfg: config_mod.Config = .{};
 var current_mode: Mode = .switcher;
-var alttab_mode = false; // true = opened via Alt+Tab (release Alt to activate)
+var alttab_mode = false; // true = opened via the Ctrl+Alt cycle hotkey (release Ctrl/Alt to activate)
+
+// Alt+Tab-style hold-to-cycle can't be built on RegisterHotKey alone: there's
+// no key-up notification for it. Instead, while alttab_mode is active we run
+// a short-lived SetTimer on the overlay window and poll GetAsyncKeyState for
+// Ctrl/Alt release. The timer only exists while the overlay is visible in
+// this mode — it is started on entry and killed the moment the mode ends
+// (activate, hide, Escape, or switching into interactive search), so there
+// is never an always-on background timer.
+const ALTTAB_TIMER_ID: usize = 1;
+const ALTTAB_POLL_MS: win32.UINT = 50;
+var modifier_watch_active = false;
 
 // Switcher state
 var windows: [window_enum.MAX_WINDOWS]window_enum.WindowInfo = undefined;
@@ -311,6 +321,43 @@ pub fn isVisible() bool {
     return visible;
 }
 
+pub fn isAltTabActive() bool {
+    return visible and alttab_mode;
+}
+
+fn startModifierWatch(hwnd: win32.HWND) void {
+    if (modifier_watch_active) return;
+    _ = win32.SetTimer(hwnd, ALTTAB_TIMER_ID, ALTTAB_POLL_MS, null);
+    modifier_watch_active = true;
+}
+
+fn stopModifierWatch(hwnd: win32.HWND) void {
+    if (!modifier_watch_active) return;
+    _ = win32.KillTimer(hwnd, ALTTAB_TIMER_ID);
+    modifier_watch_active = false;
+}
+
+fn isKeyDown(vk: i32) bool {
+    const state = win32.GetAsyncKeyState(vk);
+    return (@as(u16, @bitCast(state)) & 0x8000) != 0;
+}
+
+// Called on WM_TIMER while alttab_mode is active. Ctrl+Alt released means
+// the user is done cycling — activate the highlighted item, same as
+// releasing Alt used to do under the old low-level-hook implementation.
+fn checkAltTabModifierRelease(hwnd: win32.HWND) void {
+    if (!alttab_mode) {
+        stopModifierWatch(hwnd);
+        return;
+    }
+    const ctrl_down = isKeyDown(win32.VK_CONTROL);
+    const alt_down = isKeyDown(@as(i32, win32.VK_MENU));
+    if (!ctrl_down or !alt_down) {
+        stopModifierWatch(hwnd);
+        altTabActivate();
+    }
+}
+
 pub fn altTabShow() void {
     const hwnd = overlay_hwnd orelse return;
     if (!visible) {
@@ -359,6 +406,7 @@ pub fn altTabToSearch() void {
     if (alttab_mode) {
         // Switch from Alt+Tab cycling to normal search input.
         alttab_mode = false;
+        stopModifierWatch(hwnd);
         // Release Alt so typing works. Do not swallow the real Alt-up event;
         // Windows needs to see it or the modifier can get logically stuck.
         win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
@@ -395,6 +443,7 @@ pub fn altTabActivate() void {
 fn showOverlay(hwnd: win32.HWND) void {
     focusOverlay(hwnd);
     visible = true;
+    startModifierWatch(hwnd);
     _ = win32.InvalidateRect(hwnd, null, 0);
 }
 
@@ -403,7 +452,7 @@ fn hide() void {
     _ = win32.ShowWindow(hwnd, win32.SW_HIDE);
     visible = false;
     alttab_mode = false;
-    tray.cancelAltTab();
+    stopModifierWatch(hwnd);
 }
 
 fn refreshCurrentMode() void {
@@ -593,6 +642,10 @@ fn wndProc(hwnd: win32.HWND, msg: win32.UINT, wParam: win32.WPARAM, lParam: win3
             return 0;
         },
         win32.WM_ERASEBKGND => return 1,
+        win32.WM_TIMER => {
+            if (wParam == ALTTAB_TIMER_ID) checkAltTabModifierRelease(hwnd);
+            return 0;
+        },
         win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN_MSG => {
             handleKeyDown(hwnd, wParam);
             return 0;
@@ -682,7 +735,7 @@ fn handleKeyDown(hwnd: win32.HWND, key: win32.WPARAM) void {
             if (alttab_mode) {
                 // Space in Alt+Tab mode → switch to search mode
                 alttab_mode = false;
-                tray.cancelAltTab(); // Tell hook Alt release shouldn't activate
+                stopModifierWatch(hwnd); // Ctrl/Alt release shouldn't activate anymore
                 focusOverlay(hwnd);
                 win32.keybd_event(win32.VK_MENU, 0, win32.KEYEVENTF_KEYUP, 0);
                 search_len = 0;

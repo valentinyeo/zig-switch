@@ -128,11 +128,14 @@ pub const VK_UP: WPARAM = 0x26;
 pub const VK_DOWN: WPARAM = 0x28;
 pub const VK_SPACE: WPARAM = 0x20;
 pub const VK_SPACE_U32: u32 = 0x20;
+pub const VK_UP_U32: u32 = 0x26;
+pub const VK_DOWN_U32: u32 = 0x28;
 
 pub const MOD_ALT: u32 = 0x0001;
 pub const MOD_CONTROL: u32 = 0x0002;
 pub const MOD_SHIFT: u32 = 0x0004;
 pub const MOD_WIN: u32 = 0x0008;
+pub const MOD_NOREPEAT: u32 = 0x4000;
 
 pub const SW_SHOW: i32 = 5;
 pub const SW_HIDE: i32 = 0;
@@ -240,6 +243,7 @@ pub extern "user32" fn SetTimer(hWnd: ?HWND, nIDEvent: usize, uElapse: UINT, lpT
 pub extern "user32" fn KillTimer(hWnd: ?HWND, uIDEvent: usize) callconv(.winapi) BOOL;
 pub extern "user32" fn SetFocus(hWnd: ?HWND) callconv(.winapi) ?HWND;
 pub extern "user32" fn GetKeyState(nVirtKey: i32) callconv(.winapi) i16;
+pub extern "user32" fn GetAsyncKeyState(nVirtKey: i32) callconv(.winapi) i16;
 
 pub const VK_CONTROL: i32 = 0x11;
 pub const VK_SHIFT: i32 = 0x10;
@@ -333,41 +337,8 @@ pub extern "kernel32" fn FindNextFileW(hFindFile: HANDLE, lpFindFileData: *WIN32
 pub extern "kernel32" fn FindClose(hFindFile: HANDLE) callconv(.winapi) BOOL;
 pub extern "kernel32" fn ExpandEnvironmentStringsW(lpSrc: [*:0]const u16, lpDst: *[512]u16, nSize: DWORD) callconv(.winapi) DWORD;
 
-// Low-level keyboard hook
-pub const HHOOK = *opaque {};
-pub const WH_KEYBOARD_LL: i32 = 13;
-pub const HC_ACTION: i32 = 0;
-pub const WM_KEYDOWN_HOOK: DWORD = 0x0100;
-pub const WM_SYSKEYDOWN: DWORD = 0x0104;
-pub const WM_KEYUP_HOOK: DWORD = 0x0101;
-pub const WM_SYSKEYUP: DWORD = 0x0105;
-pub const VK_LMENU: DWORD = 0xA4; // Left Alt
-pub const VK_RMENU: DWORD = 0xA5; // Right Alt
-pub const VK_TAB_U32: DWORD = 0x09;
-pub const LLKHF_ALTDOWN: DWORD = 0x20;
-
-pub const KBDLLHOOKSTRUCT = extern struct {
-    vkCode: DWORD = 0,
-    scanCode: DWORD = 0,
-    flags: DWORD = 0,
-    time: DWORD = 0,
-    dwExtraInfo: usize = 0,
-};
-
-pub const HOOKPROC_LL = *const fn (i32, WPARAM, LPARAM) callconv(.winapi) LRESULT;
-
-pub extern "user32" fn SetWindowsHookExW(idHook: i32, lpfn: HOOKPROC_LL, hmod: ?HINSTANCE, dwThreadId: DWORD) callconv(.winapi) ?HHOOK;
-pub extern "user32" fn CallNextHookEx(hhk: ?HHOOK, nCode: i32, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) LRESULT;
-pub extern "user32" fn UnhookWindowsHookEx(hhk: HHOOK) callconv(.winapi) BOOL;
 pub extern "user32" fn PostMessageW(hWnd: ?HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
-pub extern "user32" fn PostThreadMessageW(idThread: DWORD, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) BOOL;
 pub extern "kernel32" fn GetCurrentThreadId() callconv(.winapi) DWORD;
-
-pub const WM_APP_ALTTAB: UINT = 0x8001; // Alt+Tab: show overlay + select next
-pub const WM_APP_ALTTAB_NEXT: UINT = 0x8002; // Tab while Alt held: cycle next
-pub const WM_APP_ALTTAB_PREV: UINT = 0x8003; // Shift+Tab while Alt held: cycle prev
-pub const WM_APP_ALTTAB_SEARCH: UINT = 0x8004; // Space while Alt+Tab: switch to search
-pub const WM_APP_ALTTAB_ACTIVATE: UINT = 0x8005; // Alt released: activate selected
 
 // Input simulation
 pub extern "user32" fn keybd_event(bVk: u8, bScan: u8, dwFlags: DWORD, dwExtraInfo: usize) callconv(.winapi) void;

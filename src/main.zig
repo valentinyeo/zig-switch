@@ -2,7 +2,11 @@ const std = @import("std");
 const win32 = @import("win32.zig");
 const ui = @import("ui.zig");
 const config = @import("config.zig");
-const tray = @import("tray.zig");
+
+// Hotkey IDs passed to RegisterHotKey/UnregisterHotKey.
+const HOTKEY_TOGGLE: i32 = 1;
+const HOTKEY_ALTTAB_NEXT: i32 = 2;
+const HOTKEY_ALTTAB_PREV: i32 = 3;
 
 pub fn main() void {
     // DPI awareness
@@ -12,17 +16,22 @@ pub fn main() void {
     const cfg = config.loadConfig();
 
     // Register global hotkey (Ctrl+Space = switcher)
-    if (win32.RegisterHotKey(null, 1, cfg.hotkey_modifiers, cfg.hotkey_vk) == 0) {
+    if (win32.RegisterHotKey(null, HOTKEY_TOGGLE, cfg.hotkey_modifiers | win32.MOD_NOREPEAT, cfg.hotkey_vk) == 0) {
         _ = win32.MessageBoxW(null, toWide("Failed to register hotkey. It may be in use by another application."), toWide("ZigSwitch Error"), win32.MB_OK | win32.MB_ICONERROR);
         return;
     }
 
+    // Alt+Tab replacement hotkeys. Windows reserves the literal Alt+Tab
+    // chord for its own task switcher (RegisterHotKey can't claim it), and
+    // WH_KEYBOARD_LL hooks are banned on this machine, so this app uses its
+    // own chord instead: hold Ctrl+Alt, tap Down/Up to cycle. Best-effort —
+    // if another app already owns these, the main toggle still works.
+    _ = win32.RegisterHotKey(null, HOTKEY_ALTTAB_NEXT, cfg.alttab_next_modifiers | win32.MOD_NOREPEAT, cfg.alttab_next_vk);
+    _ = win32.RegisterHotKey(null, HOTKEY_ALTTAB_PREV, cfg.alttab_prev_modifiers | win32.MOD_NOREPEAT, cfg.alttab_prev_vk);
+
     // Create overlay window
     const hInstance = win32.GetModuleHandleW(null);
     ui.init(hInstance, cfg);
-
-    // Enable Alt+Tab hook (no tray icon; ZigSwitch runs quietly in the background)
-    tray.init(hInstance);
 
     // Register to start with Windows only after the required hotkey is available.
     registerAutoStart();
@@ -34,26 +43,22 @@ pub fn main() void {
         if (ret == 0 or ret == -1) break;
 
         if (msg.message == win32.WM_HOTKEY) {
-            ui.toggle();
-        } else if (msg.message == win32.WM_APP_ALTTAB) {
-            ui.altTabShow();
-        } else if (msg.message == win32.WM_APP_ALTTAB_NEXT) {
-            ui.altTabNext();
-        } else if (msg.message == win32.WM_APP_ALTTAB_PREV) {
-            ui.altTabPrev();
-        } else if (msg.message == win32.WM_APP_ALTTAB_SEARCH) {
-            ui.altTabToSearch();
-        } else if (msg.message == win32.WM_APP_ALTTAB_ACTIVATE) {
-            ui.altTabActivate();
+            switch (@as(i32, @intCast(msg.wParam))) {
+                HOTKEY_TOGGLE => ui.toggle(),
+                HOTKEY_ALTTAB_NEXT => if (ui.isAltTabActive()) ui.altTabNext() else ui.altTabShow(),
+                HOTKEY_ALTTAB_PREV => ui.altTabPrev(),
+                else => {},
+            }
         } else {
             _ = win32.TranslateMessage(&msg);
             _ = win32.DispatchMessageW(&msg);
         }
     }
 
-    tray.deinit();
     ui.deinit();
-    _ = win32.UnregisterHotKey(null, 1);
+    _ = win32.UnregisterHotKey(null, HOTKEY_TOGGLE);
+    _ = win32.UnregisterHotKey(null, HOTKEY_ALTTAB_NEXT);
+    _ = win32.UnregisterHotKey(null, HOTKEY_ALTTAB_PREV);
 }
 
 fn registerAutoStart() void {
